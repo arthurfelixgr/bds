@@ -2,7 +2,7 @@
 
 while read linha
 do 
-    if echo "$linha" | grep -v "\(SETOR\|LAT[[:blank:]]\{1,\}LON\|^[[:blank:]]*$\)" > /dev/null
+    if echo "$linha" | grep -v "\(SETOR\|LAT[[:blank:]]\{1,\}LON\|^[[:blank:]]*$\|MODIFICADO\)" > /dev/null
     then 
         fixo=$(echo "$linha" | cut -f1)
         coord=$(echo "$linha" | cut --complement -f1 | sed 's/\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([S,N]\)[[:blank:]]\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([W,E]\)/\4\t\1\t\2\t\3\t\8\t\5\t\6\t\7\t/')
