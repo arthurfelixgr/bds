@@ -1,5 +1,5 @@
 #!/bin/bash -
-# Objetivo: organizar os setores nos quais há fixos sem nomes, fixos de mesmas coordenadas e nomes diferentes, e fixos de nomes iguais com coordenadas diferentes
+# Objetivo: organizar os setores nos quais há fixos sem nomes, fixos de mesmas coordenadas e nomes diferentes, fixos de nomes iguais com coordenadas diferentes e fixos repetidos em sequência
 # Uso: forneça texto cru como argumento
 
 rm fixosConhecidos 2> /dev/null
@@ -50,7 +50,7 @@ do
     else 
         echo "$linha"
     fi 
-done < loop1
+done < loop1 | uniq
 
 rm fixosConhecidos 2> /dev/null
 rm loop1 2> /dev/null
