@@ -1,4 +1,6 @@
 #!/bin/bash -
+# Objetivo: organizar os setores nos quais há fixos sem nomes, fixos de mesmas coordenadas e nomes diferentes, e fixos de nomes iguais com coordenadas diferentes
+# Uso: forneça texto cru como argumento
 
 rm fixosConhecidos 2> /dev/null
 rm loop1 2> /dev/null
