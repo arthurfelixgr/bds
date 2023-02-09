@@ -1,5 +1,7 @@
 #!/bin/bash
+# Objetivo: converter coordenadas geográficas em cartesianas
 # Uso: forneça texto cru como argumento
+
 while read linha
 do 
     if echo "$linha" | grep -v "\(SETOR\|LAT[[:blank:]]\{1,\}LON\|^[[:blank:]]*$\|MODIFICADO\)" > /dev/null
