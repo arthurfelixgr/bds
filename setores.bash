@@ -50,7 +50,7 @@ do
     else 
         echo "$linha"
     fi 
-done < loop1 | uniq
+done < loop1 | uniq | sed -e '/^[[:space:]]*$/d' -e '/\(SETOR\|MODIFICADO\)/i\\'
 
 rm fixosConhecidos 2> /dev/null
 rm loop1 2> /dev/null
