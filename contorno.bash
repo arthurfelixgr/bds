@@ -43,12 +43,5 @@ echo "fir = unary_union([$( echo "${sects[@]}" | sed -e 's/ /, /g' -e 's/^, //' 
 echo "print(fir)" >> contorno.py 
 chmod +x contorno.py
 
-./contorno.py | sed -e 's/^.*((//' -e 's/))$//' | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/ /\t/' | while read linha 
-do 
-    linha=$(echo "$linha" | sed 's/[[:space:]]\{1,\}/\t/g' )
-    latitude=$( echo "$linha" | cut -f1 )
-    longitude=$( echo "$linha" | cut -f2 )
-
-    grep -m1 "\\$latitude[[:blank:]]\{1,\}$longitude" "$1"
-done 
+./contorno.py | sed -e 's/^.*((//' -e 's/))$//' | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/ /\t/' 
 rm contorno.py
