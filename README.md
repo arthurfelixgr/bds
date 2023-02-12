@@ -10,7 +10,7 @@
 ## Exemplos:
 
 #### Organizando a tabela de setores (texto cru):
-```
+```console
 ./setores.bash setores
 ```
 
