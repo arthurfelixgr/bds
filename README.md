@@ -41,5 +41,5 @@
 
 ## Afazeres:
 
-* Determinar quais aerovias pertencem à FIR e por onde entram e saem
+* Determinar quais aerovias pertencem à FIR, e por onde entram e saem
 * Criar scripts para inserção dos resultados na base
