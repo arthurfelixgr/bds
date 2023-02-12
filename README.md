@@ -11,7 +11,7 @@
 
 #### Organizando a tabela de setores (texto cru):
 ```console
-./setores.bash setores
+$ ./setores.bash setores
 ```
 
 #### Para salvar o resultado num arquivo (aplicável a todos os scripts):
