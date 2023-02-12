@@ -31,7 +31,7 @@
 ```
 ./contorno.bash setores-cartesianos setores-corrigidos > contorno
 ./setores-cartesianos.bash contorno > contorno-cartesiano
-./ponto-dentro waypoints contorno-cartesiano
+./ponto-dentro.bash waypoints contorno-cartesiano
 ```
 ## Requisitos:
 
