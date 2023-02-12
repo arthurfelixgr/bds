@@ -27,7 +27,7 @@
 ./setores-cartesianos.bash setores-corrigidos > setores-cartesianos
 ./contorno.bash setores-cartesianos setores-corrigidos
 ```
-#### Determinar quais pontos, de um arquivo contendo waypoints, estão dentro da FIR (em testes):
+#### Determinar quais pontos estão dentro da FIR a partir de um arquivo contendo waypoints (em testes):
 ```
 ./contorno.bash setores-cartesianos setores-corrigidos > contorno
 ./setores-cartesianos.bash contorno > contorno-cartesiano
