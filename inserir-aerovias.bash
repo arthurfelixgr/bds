@@ -1,7 +1,37 @@
 #! /bin/bash -
 
 # Uso:
-#   $ ./inserir-aerovias.bash planilha base.tar
+#   $ ./inserir-aerovias.bash planilha-crua base.tar
+
+if [ "$#" -eq 2 ]
+then 
+   if file "$2" | grep -q 'ASCII' && file "$1" | grep -q 'tar archive'
+   then 
+      echo "Erro de sintaxe." >&2
+      exit 1
+   fi 
+
+   if ! file "$1" | grep -q 'ASCII' && ! file "$2" | grep -q 'tar archive'
+   then 
+      echo "Arquivos inválidos." >&2
+      exit 1
+   fi 
+
+   if ! file "$1" | grep -q 'ASCII'
+   then 
+      echo "Arquivo de aerovias inválido." >&2
+      exit 1
+   fi 
+
+   if ! file "$2" | grep -q 'tar archive'
+   then 
+      echo "Arquivo de base inválido." >&2
+      exit 1
+   fi 
+else 
+   echo "Argumentos insuficientes." >&2
+   exit 1
+fi 
 
 planilha="$1"
 base="$2"
@@ -12,6 +42,7 @@ extrairBase() {
    #pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
    pasta="$nomeBase"
    mkdir -p "$pasta"
+   rm "$pasta"/*
    tar -xf "$1" -C "$pasta"
    cd "$pasta"
 
@@ -28,14 +59,58 @@ extrairBase() {
       fi 
    done 
 
+   cd ..
    echo "Extração completa." >&2
 }
 
-pontoDentro() {
-   
+cartesianas() {
+   if [ "$#" -eq 0 ] 
+   then 
+      stdin=$(cat)
+      lat=$(echo "$stdin" | cut -d' ' -f1)
+      lon=$(echo "$stdin" | cut -d' ' -f2)
+   else 
+      lat="$1"
+      lon="$2"
+   fi 
+
+   hy=$(echo $lat | cut -c1)
+   gy=$(echo $lat | cut -c2,3)
+   my=$(echo $lat | cut -c4,5)
+   sy=$(echo $lat | cut -c6,7)
+
+   hx=$(echo $lon | cut -c1)
+   gx=$(echo $lon | cut -c2-4)
+   mx=$(echo $lon | cut -c5,6)
+   sx=$(echo $lon | cut -c7,8)
+
+   [ "$hy" = "S" ] && hy='-1' || hy=1
+   [ "$hx" = "W" ] && hx='-1' || hx=1
+
+   latCart=$(awk -v "latHem=$hy" -v "latGrau=$gy" -v "latMin=$my" -v "latSeg=$sy" 'BEGIN { lat = latHem * (latGrau + latMin/60 + latSeg/3600) ; printf "%.15f \n", lat }')
+   lonCart=$(awk -v "lonHem=$hx" -v "lonGrau=$gx" -v "lonMin=$mx" -v "lonSeg=$sx" 'BEGIN { lon = lonHem * (lonGrau + lonMin/60 + lonSeg/3600) ; printf "%.15f \n", lon }')
+
+   printf "%s %s" "$latCart" "$lonCart"
 }
 
+extrairContorno() {
+   printf "["
+
+   test -n "$pasta" && grep '^SBRE' "$pasta/firseg_data" | 
+   awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
+   while read linha
+   do 
+      echo "$linha" | cartesianas | sed -e 's/^ */[/' -e 's/ *$/], /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
+   done 
+
+   printf "]"
+}
+
+#pontoDentro() {}
+
 atualizarBalizas() {
+   echo "Atualizando balizas..." >&2
+
    data=''
    jur=''
 
@@ -83,7 +158,9 @@ atualizarBalizas() {
 
             sed -i "/$nome/s/[NS];\([0-9]\{1,\};\)\{3\}[WE];\([0-9]\{1,\};\)\{3\}/$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x;" "$arq"
          fi 
-      else 
+      #else 
       fi
    done 
+
+   echo "Balizas atualizadas. " >&2
 }
