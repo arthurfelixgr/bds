@@ -211,7 +211,7 @@ pontoDentro() {
    lon=$(echo "$coords" | awk '{ print $2 }')
    fir=$(extrairContorno)
 
-   cat <<_EOF | node
+   node <<_EOF 
    var pointIn = require('./pointinpoly').pointInPoly;
    console.log(pointIn($lat, $lon, $fir));
 _EOF
@@ -227,52 +227,61 @@ atualizarBalizas() {
    sed -e 's/^[[:blank:]]*//' | 
    grep -v '^[[:space:]]*$' | 
    sort -uk2,2 | 
-   while read tipo nome latitude longitude 
+   while IFS=$'\t' read tipo nome latitude longitude 
    do 
       if echo "$tipo" | grep -qiE '(VOR|NDB|DME)' 
       then 
-         arq='navaid_data'
-         jur='navaid_jur_data'
+         arq="$nomeBase/navaid_data"
+         jur="$nomeBase/navaid_jur_data"
       elif echo "$tipo" | grep -qi 'waypoint' 
       then 
-         arq='fix_data'
-         jur='fix_jur_data'
+         arq="$nomeBase/fix_data"
+         jur="$nomeBase/fix_jur_data"
       else 
-         echo "Erro." >&2
+         echo "$nome: erro no tipo da baliza ($tipo). Verifique o arquivo $planilha e reinicie o processo. " >&2
          exit 1
       fi 
 
-      latitudeSeg=$(echo "$latitude" | awk '{ printf "%02.f", $4 }')
-      latitudeJ=$(echo "$latitude" | awk '{ "%s%02d%02d", $1, $2, $3 }}' ; echo "$latitudeSeg")
+      latitude=$(echo "$latitude" | sed 's/[[:blank:]]*//g')
+      longitude=$(echo "$longitude" | sed 's/[[:blank:]]*//g')
 
-      longitudeSeg=$(echo "$longitude" | awk '{ printf "%02.f", $4 }')
-      longitudeJ=$(echo "$longitude" | awk '{ "%s%03d%02d", $1, $2, $3 }}' ; echo "$longitudeSeg")
+      if ! echo "$latitude" | grep -q '^[NS][0-9]\{6\}\.[0-9]\{2\}$' || ! echo "$longitude" | grep -q '^[WE][0-9]\{7\}\.[0-9]\{2\}$'
+      then 
+        echo "Coordenadas inválidas. Verifique as coordenadas da baliza $nome no arquivo $planilha e reinicie o processo. " >&2
+        exit 1
+      fi 
+
+      latitudeSeg=$(echo "$latitude" | sed 's/.*\([0-9]\{2\}\.[0-9]\{2\}\) *$/\1/' | awk '{ printf "%02.f", $1 }')
+      latitude=$(echo "$latitude" | sed "s/^\([NS][0-9]\{4\}\).*/\1$latitudeSeg/")
+
+      longitudeSeg=$(echo "$longitude" | sed 's/.*\([0-9]\{2\}\.[0-9]\{2\}\) *$/\1/' | awk '{ printf "%02.f", $1 }')
+      longitude=$(echo "$longitude" | sed "s/^\([WE][0-9]\{5\}\).*/\1$longitudeSeg/")
 
       if registro=$(grep "$nome" "$arq")
       then 
          latBase=$(echo "$registro" | awk -F';' '{ printf "%s%02d%02d%02d", $6, $7, $8, $9 }')
          longBase=$(echo "$registro" | awk -F';' '{ printf "%s%03d%02d%02d", $10, $11, $12, $13 }')
 
-         if ! [ "$latBase" = "$latitudeJ" ] && ! [ "$longBase" = "$longitudeJ" ]
+         if [ "$latBase" != "$latitude" ] || [ "$longBase" != "$longitude" ]
          then 
-            hem_y=$(echo "$latitude" | cut -d' ' -f1 | awk '{ printf "%d", $1 }')
-            grau_y=$(echo "$latitude" | cut -d' ' -f2 | awk '{ printf "%d", $1 }')
-            min_y=$(echo "$latitude" | cut -d' ' -f3 | awk '{ printf "%d", $1 }')
+            hem_y=$(echo "$latitude" | cut -c1 | awk '{ printf "%s", $1 }')
+            grau_y=$(echo "$latitude" | cut -c2,3 | awk '{ printf "%d", $1 }')
+            min_y=$(echo "$latitude" | cut -c4,5 | awk '{ printf "%d", $1 }')
             seg_y=$(echo "$latitudeSeg" | awk '{ printf "%d", $1 }')
 
-            hem_x=$(echo "$longitude" | cut -d' ' -f1 | awk '{ printf "%d", $1 }')
-            grau_x=$(echo "$longitude" | cut -d' ' -f2 | awk '{ printf "%d", $1 }')
-            min_x=$(echo "$longitude" | cut -d' ' -f3 | awk '{ printf "%d", $1 }')
+            hem_x=$(echo "$longitude" | cut -c1 | awk '{ printf "%s", $1 }')
+            grau_x=$(echo "$longitude" | cut -c2-4 | awk '{ printf "%d", $1 }')
+            min_x=$(echo "$longitude" | cut -c5,6 | awk '{ printf "%d", $1 }')
             seg_x=$(echo "$longitudeSeg" | awk '{ printf "%d", $1 }')
 
-            sed -i "/$nome/s/[NS];\([0-9]\{1,\};\)\{3\}[WE];\([0-9]\{1,\};\)\{3\}/$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x;" "$arq"
+            sed -i "/$nome/s/[NS];\([0-9]\{1,\};\)\{3\}[WE];\([0-9]\{1,\};\)\{3\}/$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x;/" "$arq"
          fi 
       #else 
       fi
-   done 
+   done
 
    echo "Balizas atualizadas. " >&2
 }
 
 extrairBase "$base"
-pontoDentro S125431 W0381921
+atualizarBalizas
