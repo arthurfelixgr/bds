@@ -318,6 +318,7 @@ atualizarBalizas() {
             esac
 
             echo "$nome;;$nome;$tipoNaBase;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$arq"
+            # determinar a jurisdicao do ponto
          fi 
       fi
    done
