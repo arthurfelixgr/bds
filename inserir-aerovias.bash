@@ -132,8 +132,7 @@ nomeBase=$(tar -tf "$base" | head -n1 | cut -d'_' -f1)
 
 extrairBase() {
    echo "Extraindo a base $1..." >&2
-   #pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
-   pasta="$nomeBase"
+   pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
    mkdir -p "$pasta"
    rm "$pasta"/*
    tar -xf "$1" -C "$pasta"
@@ -326,7 +325,26 @@ atualizarBalizas() {
    echo "Balizas atualizadas. " >&2
 }
 
-# empacotar a base
+empacotarBase() {
+   echo "Empacotando a base... " >&2
+   cd "$nomeBase"
+
+   for i in *
+   do 
+     [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
+   done 
+
+   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%SP').tar" *.EXP
+   then 
+      rm -r *.EXP
+      cd ..
+      echo "Pacote criado com sucesso! " >&2
+   else 
+      echo "Erro na criação do pacote. " >&2
+      exit 1
+   fi 
+}
 
 extrairBase "$base"
 atualizarBalizas
+empacotarBase
