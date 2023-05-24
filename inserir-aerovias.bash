@@ -318,7 +318,6 @@ atualizarBalizas() {
             esac
 
             echo "$nome;;$nome;$tipoNaBase;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$arq"
-            # determinar a jurisdicao do ponto
          fi 
       fi
    done
@@ -332,7 +331,7 @@ empacotarBase() {
 
    for i in *
    do 
-     [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
+      [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
    done 
 
    if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%SP').tar" *.EXP
@@ -346,6 +345,81 @@ empacotarBase() {
    fi 
 }
 
+aerovias() {
+   mkdir -p awys
+   rm -f awys/*
+
+   awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 2 { print $1, $4, $5, $6, $8, $9, $10 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo2 p2 la2 lo2
+   do 
+      printf "$p1\t$la1\t$lo2\n$p2\t$la2\t$lo2\n" >> "awys/$awy"
+   done 
+
+   cd awys
+   sed -i '/^[[:space:]]*$/d' *
+
+   for i in *
+   do 
+      primeiroPontoFora=''
+
+      while IFS=$'\t' read ponto la lo
+      do 
+         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
+         then 
+            primeiroPontoFora="$ponto"
+         else 
+            if [ -z "$primeiroPontoFora" ] 
+            then 
+               tac "$i" | sed "/$ponto/q" > "$i.fase1"
+            else 
+               tac "$i" | sed "/$primeiroPontoFora/q" > "$i.fase1"
+            fi 
+
+            break
+         fi 
+      done < "$i"
+   done 
+
+   for i in *.fase1
+   do 
+      primeiroPontoFora=''
+
+      while IFS=$'\t' read ponto la lo
+      do 
+         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
+         then 
+            primeiroPontoFora="$ponto"
+         else 
+            if [ -z "$primeiroPontoFora" ] 
+            then 
+               tac "$i" | sed "/$ponto/q" > "$i.fase2"
+            else 
+               tac "$i" | sed "/$primeiroPontoFora/q" > "$i.fase2"
+            fi 
+
+            break
+         fi 
+      done < "$i"
+   done 
+
+   for i in * 
+   do 
+      echo "$i" | grep -qv '\.fase1\.fase2$' && rm "$i"
+   done  
+
+   for i in *
+   do 
+      nome=$(echo "$i" | sed 's/\([^.]*\).*/\1/')
+      mv "$i" "$nome"
+   done 
+
+   cd ..
+}
+
+limpar() {
+   rm -r "$nomeBase"
+}
+
 extrairBase "$base"
 atualizarBalizas
-empacotarBase
+aerovias 
+# empacotarBase
