@@ -129,6 +129,7 @@ _EOF
 planilha="$1"
 base="$2"
 nomeBase=$(tar -tf "$base" | head -n1 | cut -d'_' -f1)
+pwd=$PWD
 
 extrairBase() {
    echo "Extraindo a base $1..." >&2
@@ -153,6 +154,38 @@ extrairBase() {
 
    cd ..
    echo "Extração completa." >&2
+}
+
+geograficas() {
+   node << _EOF
+      function converterCoordenadas(latitude, longitude) {
+         // Converter latitude
+         var latHemisferio = (latitude >= 0) ? "N" : "S";
+         var latGrau = padDigits(Math.floor(Math.abs(latitude)), 2);
+         var latMinuto = padDigits(Math.floor((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60), 2);
+         var latSegundo = padDigits(Math.floor(((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60 - Math.floor((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60)) * 60), 2);
+
+         // Converter longitude
+         var lonHemisferio = (longitude >= 0) ? "E" : "W";
+         var lonGrau = padDigits(Math.floor(Math.abs(longitude)), 3);
+         var lonMinuto = padDigits(Math.floor((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60), 2);
+         var lonSegundo = padDigits(Math.floor(((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60 - Math.floor((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60)) * 60), 2);
+
+         // Retornar coordenadas geográficas no formato HGMS
+         return latHemisferio + latGrau + latMinuto + latSegundo + "\t" + lonHemisferio + lonGrau + lonMinuto + lonSegundo;
+      }
+
+      function padDigits(number, digits) {
+         return String(number).padStart(digits, "0");
+      }
+
+      // Exemplo de uso
+      var latitude = "$1";
+      var longitude = "$2";
+
+      var coordenadasGeograficas = converterCoordenadas(latitude, longitude);
+      console.log(coordenadasGeograficas);
+_EOF
 }
 
 cartesianas() {
@@ -188,14 +221,14 @@ cartesianas() {
 extrairContorno() {
    printf "["
 
-   test -n "$pasta" && grep '^SBRE' "$pasta/firseg_data" | 
+   test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
    awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
    while read linha
    do 
       echo "$linha" | cartesianas | sed -e 's/^ */[/' -e 's/ *$/], /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
    done 
 
-   test -n "$pasta" && grep '^SBRE' "$pasta/firseg_data" | 
+   test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
    head -n1 |  
    awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
    cartesianas | 
@@ -212,8 +245,96 @@ pontoDentro() {
 
    node <<_EOF 
    var pointIn = require('./pointinpoly').pointInPoly;
+   console.log("$lat, $lon")
    console.log(pointIn($lat, $lon, $fir));
 _EOF
+}
+
+cruzFronteira() {
+   node << _EOF
+   // Função para calcular a interseção entre dois segmentos de reta
+function calcularIntersecao(pontoA, pontoB, pontoC, pontoD) {
+  var ua, ub, denomitor;
+
+  denomitor = (pontoD[1] - pontoC[1]) * (pontoB[0] - pontoA[0]) - (pontoD[0] - pontoC[0]) * (pontoB[1] - pontoA[1]);
+  ua = ((pontoD[0] - pontoC[0]) * (pontoA[1] - pontoC[1]) - (pontoD[1] - pontoC[1]) * (pontoA[0] - pontoC[0])) / denomitor;
+  ub = ((pontoB[0] - pontoA[0]) * (pontoA[1] - pontoC[1]) - (pontoB[1] - pontoA[1]) * (pontoA[0] - pontoC[0])) / denomitor;
+
+  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+    var intersecaoX = pontoA[0] + ua * (pontoB[0] - pontoA[0]);
+    var intersecaoY = pontoA[1] + ua * (pontoB[1] - pontoA[1]);
+    return [intersecaoX, intersecaoY];
+  }
+
+  return null;
+}
+
+// Função para verificar se um ponto está dentro de um polígono
+function pontoDentroDoPoligono(ponto, poligono) {
+  var intersecoes = 0;
+
+  for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    if ((poligono[i][1] > ponto[1]) !== (poligono[j][1] > ponto[1]) &&
+        ponto[0] < (poligono[j][0] - poligono[i][0]) * (ponto[1] - poligono[i][1]) / (poligono[j][1] - poligono[i][1]) + poligono[i][0]) {
+      intersecoes++;
+    }
+  }
+
+  return intersecoes % 2 !== 0;
+}
+
+// Função principal para calcular a interseção entre um segmento e um polígono
+function calcularIntersecaoSegmentoPoligono(segmento, poligono) {
+  var pontoA = segmento[0];
+  var pontoB = segmento[1];
+
+  var intersecoes = [];
+
+  for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    var pontoC = poligono[i];
+    var pontoD = poligono[j];
+
+    var intersecao = calcularIntersecao(pontoA, pontoB, pontoC, pontoD);
+
+    if (intersecao !== null) {
+      intersecoes.push(intersecao);
+    }
+  }
+
+  return intersecoes;
+}
+
+// Exemplo de uso
+var segmento = $1;
+var poligono = $2;
+
+var pontosIntersecao = calcularIntersecaoSegmentoPoligono(segmento, poligono);
+console.log(pontosIntersecao);
+_EOF
+}
+
+coordsBase() {
+   if [ "$#" -eq 0 ] 
+   then 
+      stdin=$(cat)
+      latitude=$(echo "$stdin" | cut -d' ' -f1)
+      longitude=$(echo "$stdin" | cut -d' ' -f2)
+   else 
+      latitude="$1"
+      longitude="$2"
+   fi 
+
+   hem_y=$(echo "$latitude" | cut -c1)
+   grau_y=$(echo "$latitude" | cut -c2,3 | awk '{ printf "%d", $1 }')
+   min_y=$(echo "$latitude" | cut -c4,5 | awk '{ printf "%d", $1 }')
+   seg_y=$(echo "$latitude" | cut -c6,7 | awk '{ printf "%d", $1 }')
+   
+   hem_x=$(echo "$longitude" | cut -c1)
+   grau_x=$(echo "$longitude" | cut -c2-4 | awk '{ printf "%d", $1 }')
+   min_x=$(echo "$longitude" | cut -c5,6 | awk '{ printf "%d", $1 }')
+   seg_x=$(echo "$longitude" | cut -c7,8 | awk '{ printf "%d", $1 }')
+
+   printf "$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x"
 }
 
 atualizarBalizas() {
@@ -262,20 +383,6 @@ atualizarBalizas() {
       longitudeSeg=$(echo "$longitude" | sed 's/.*\([0-9]\{2\}\.[0-9]\{2\}\) *$/\1/' | awk '{ printf "%02.f", $1 }')
       longitude=$(echo "$longitude" | sed "s/^\([WE][0-9]\{5\}\).*/\1$longitudeSeg/")
 
-      coordsBase() {
-         hem_y=$(echo "$latitude" | cut -c1)
-         grau_y=$(echo "$latitude" | cut -c2,3 | awk '{ printf "%d", $1 }')
-         min_y=$(echo "$latitude" | cut -c4,5 | awk '{ printf "%d", $1 }')
-         seg_y=$(echo "$latitudeSeg" | awk '{ printf "%d", $1 }')
-         
-         hem_x=$(echo "$longitude" | cut -c1)
-         grau_x=$(echo "$longitude" | cut -c2-4 | awk '{ printf "%d", $1 }')
-         min_x=$(echo "$longitude" | cut -c5,6 | awk '{ printf "%d", $1 }')
-         seg_x=$(echo "$longitudeSeg" | awk '{ printf "%d", $1 }')
-
-         printf "$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x"
-      }
-
       if registro=$(grep "$nome" "$arq")
       then 
          latBase=$(echo "$registro" | awk -F';' '{ printf "%s%02d%02d%02d", $6, $7, $8, $9 }')
@@ -283,7 +390,7 @@ atualizarBalizas() {
 
          if [ "$latBase" != "$latitude" ] || [ "$longBase" != "$longitude" ]
          then 
-            pontoBase=$(coordsBase)
+            pontoBase=$(coordsBase "$latitude" "$longitude")
             sed -i "/$nome/s/[NS];\([0-9]\{1,\};\)\{3\}[WE];\([0-9]\{1,\};\)\{3\}/$pontoBase;/" "$arq"
          fi 
       else 
@@ -291,7 +398,7 @@ atualizarBalizas() {
 
          if [ "$resultado" = "true" ]
          then 
-            pontoBase=$(coordsBase)
+            pontoBase=$(coordsBase "$latitude" "$longitude")
             tipoNaBase=''
 
             case "$tipo" in
@@ -349,34 +456,17 @@ aerovias() {
    mkdir -p awys
    rm -f awys/*
 
-   awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 2 { print $1, $4, $5, $6, $8, $9, $10 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo2 p2 la2 lo2
+   awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 2 { print $1, $4, $5, $6, $8, $9, $10 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo1 p2 la2 lo2
    do 
-      printf "$p1\t$la1\t$lo2\n$p2\t$la2\t$lo2\n" >> "awys/$awy"
+      printf "$p1\t$la1\t$lo1\n$p2\t$la2\t$lo2\n" >> "awys/$awy"
    done 
 
    cd awys
    sed -i '/^[[:space:]]*$/d' *
 
-   for i in *
+   for i in * 
    do 
-      primeiroPontoFora=''
-
-      while IFS=$'\t' read ponto la lo
-      do 
-         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
-         then 
-            primeiroPontoFora="$ponto"
-         else 
-            if [ -z "$primeiroPontoFora" ] 
-            then 
-               tac "$i" | sed "/$ponto/q" > "$i.fase1"
-            else 
-               tac "$i" | sed "/$primeiroPontoFora/q" > "$i.fase1"
-            fi 
-
-            break
-         fi 
-      done < "$i"
+      cat -n "$i" | sort -uk2 | sort -nk1 | cut --complement -f1 > "$i.fase1"
    done 
 
    for i in *.fase1
@@ -391,9 +481,31 @@ aerovias() {
          else 
             if [ -z "$primeiroPontoFora" ] 
             then 
-               tac "$i" | sed "/$ponto/q" > "$i.fase2"
+               tac "$i" > "$i.fase2"
             else 
                tac "$i" | sed "/$primeiroPontoFora/q" > "$i.fase2"
+            fi 
+
+            break
+         fi 
+      done < "$i"
+   done
+
+   for i in *.fase2
+   do 
+      primeiroPontoFora=''
+
+      while IFS=$'\t' read ponto la lo
+      do 
+         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
+         then 
+            primeiroPontoFora="$ponto"
+         else 
+            if [ -z "$primeiroPontoFora" ] 
+            then 
+               tac "$i" > "$i.fase3"
+            else 
+               tac "$i" | sed "/$primeiroPontoFora/q" > "$i.fase3"
             fi 
 
             break
@@ -403,13 +515,61 @@ aerovias() {
 
    for i in * 
    do 
-      echo "$i" | grep -qv '\.fase1\.fase2$' && rm "$i"
+      echo "$i" | grep -qv '\.fase3$' && rm "$i"
    done  
 
    for i in *
    do 
       nome=$(echo "$i" | sed 's/\([^.]*\).*/\1/')
       mv "$i" "$nome"
+   done
+   
+   fir=$(extrairContorno)
+   n=0
+
+   for i in * 
+   do 
+      ponto0=$(sed -n '1p' "$i" | cut -f1)
+      ponto1=$(sed -n '2p' "$i" | cut -f1)
+
+      if ! grep -q "$ponto0" "../$nomeBase/fix_data" "../$nomeBase/navaid_data"
+      then 
+         if grep -q "SBRE.*$ponto1" "../$nomeBase/firseg_data" 
+         then 
+            sed -i '1d' "$i"
+         else 
+            segA='['$(
+               head -n2 "$i" | 
+               awk -F '(\t|  *)' '{ printf "%s\t%s%02d%02d%02.f\t%s%03d%02d%02.f\n", $1, $2, $3, $4, $5, $6, $7, $8, $9 }' | 
+               while read nome lat lon
+               do 
+                  cartesianas "$lat" "$lon" | sed -e 's/^/[/' -e 's/$/], /' -e 's/[[:blank:]]\{1,\}/, /'
+               done 
+            )']'
+
+            cruzA=$(cruzFronteira "$segA" "$fir" | sed 's/[][ ]//g')
+            while [ -z "$cruzA" ] 
+            do 
+               sed -i '1d' "$i"
+               
+            done 
+
+            cruzALatK=$(echo "$cruzA" | cut -d',' -f1)
+            cruzALonK=$(echo "$cruzA" | cut -d',' -f2)
+            cruzAG=$(geograficas "$cruzALatK" "$cruzALonK")
+
+            cruzALat=$(echo "$cruzAG" | cut -f1)
+            cruzALon=$(echo "$cruzAG" | cut -f2)
+            pontoBase=$(coordsBase "$cruzALat" "$cruzALon")
+            cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
+            n=$((n+1))
+            #echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
+
+            cruzALat=$(echo "$cruzALat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            cruzALon=$(echo "$cruzALon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            sed -i "/$ponto0/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+         fi 
+      fi 
    done 
 
    cd ..
@@ -419,7 +579,5 @@ limpar() {
    rm -r "$nomeBase"
 }
 
-extrairBase "$base"
-atualizarBalizas
-aerovias 
-# empacotarBase
+aerovias
+#extrairContorno | sed 's/\], *\[/\n/g'
