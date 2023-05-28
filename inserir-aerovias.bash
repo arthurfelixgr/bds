@@ -33,99 +33,6 @@ else
    exit 1
 fi 
 
-cat <<_EOF > pointinpoly.js # créditos: https://github.com/metafloor/pointinpoly
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([], factory);
-    } else if (typeof module === 'object' && module.exports) {
-        module.exports = factory();
-    } else {
-        let exports = factory();
-        root.pointInPoly = exports.pointInPoly;
-        root.pointInXYPoly = exports.pointInXYPoly;
-    }
-}(typeof self !== 'undefined' ? self : this, function () {
-
-function ptinxypoly(x, y, poly) {
-    let c = false;
-    for (let l = poly.length, i = 0, j = l-1; i < l; j = i++) {
-        let xj = poly[j].x, yj = poly[j].y, xi = poly[i].x, yi = poly[i].y;
-        let where = (yi - yj) * (x - xi) - (xi - xj) * (y - yi);
-        if (yj < yi) {
-            if (y >= yj && y < yi) {
-                if (where == 0) return true; 
-                if (where > 0) {
-                    if (y == yj) { 
-                        if (y > poly[j == 0 ? l-1 : j-1].y) {
-                            c = !c;
-                        }
-                    } else {
-                        c = !c;
-                    }
-                }
-            }
-        } else if (yi < yj) {
-            if (y > yi && y <= yj) {
-                if (where == 0) return true; 
-                if (where < 0) {
-                    if (y == yj) { 
-                        if (y < poly[j == 0 ? l-1 : j-1].y) {
-                            c = !c;
-                        }
-                    } else {
-                        c = !c;
-                    }
-                }
-            }
-        } else if (y == yi && (x >= xj && x <= xi || x >= xi && x <= xj)) {
-            return true; 
-        }
-    }
-    return c;
-}
-
-function ptinpoly(x, y, poly) {
-    let c = false;
-    for (let l = poly.length, i = 0, j = l-1; i < l; j = i++) {
-        let xj = poly[j][0], yj = poly[j][1], xi = poly[i][0], yi = poly[i][1];
-        let where = (yi - yj) * (x - xi) - (xi - xj) * (y - yi);
-        if (yj < yi) {
-            if (y >= yj && y < yi) {
-                if (where == 0) return true; 
-                if (where > 0) {
-                    if (y == yj) { 
-                        if (y > poly[j == 0 ? l-1 : j-1][1]) {
-                            c = !c;
-                        }
-                    } else {
-                        c = !c;
-                    }
-                }
-            }
-        } else if (yi < yj) {
-            if (y > yi && y <= yj) {
-                if (where == 0) return true; 
-                if (where < 0) {
-                    if (y == yj) { 
-                        if (y < poly[j == 0 ? l-1 : j-1][1]) {
-                            c = !c;
-                        }
-                    } else {
-                        c = !c;
-                    }
-                }
-            }
-        } else if (y == yi && (x >= xj && x <= xi || x >= xi && x <= xj)) {
-            return true; 
-        }
-    }
-    return c;
-}
-
-return { pointInPoly:ptinpoly, pointInXYPoly:ptinxypoly };
-}));
-_EOF
-
 planilha="$1"
 base="$2"
 nomeBase=$(tar -tf "$base" | head -n1 | cut -d'_' -f1)
@@ -157,35 +64,38 @@ extrairBase() {
 }
 
 geograficas() {
-   node << _EOF
-      function converterCoordenadas(latitude, longitude) {
-         // Converter latitude
-         var latHemisferio = (latitude >= 0) ? "N" : "S";
-         var latGrau = padDigits(Math.floor(Math.abs(latitude)), 2);
-         var latMinuto = padDigits(Math.floor((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60), 2);
-         var latSegundo = padDigits(Math.floor(((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60 - Math.floor((Math.abs(latitude) - Math.floor(Math.abs(latitude))) * 60)) * 60), 2);
+   if [ "$#" -eq 0 ] 
+   then 
+      stdin=$(cat)
+      lat=$(echo "$stdin" | cut -d' ' -f1)
+      lon=$(echo "$stdin" | cut -d' ' -f2)
+   else 
+      lat="$1"
+      lon="$2"
+      
+      if [ -z "$1" ] || [ -z "$2" ]
+      then
+         echo "geograficas(): argumentos insuficientes. " >&2
+      fi 
+   fi
 
-         // Converter longitude
-         var lonHemisferio = (longitude >= 0) ? "E" : "W";
-         var lonGrau = padDigits(Math.floor(Math.abs(longitude)), 3);
-         var lonMinuto = padDigits(Math.floor((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60), 2);
-         var lonSegundo = padDigits(Math.floor(((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60 - Math.floor((Math.abs(longitude) - Math.floor(Math.abs(longitude))) * 60)) * 60), 2);
+   lat=$1
+   lon=$2
 
-         // Retornar coordenadas geográficas no formato HGMS
-         return latHemisferio + latGrau + latMinuto + latSegundo + "\t" + lonHemisferio + lonGrau + lonMinuto + lonSegundo;
-      }
+   echo "$lat" | grep -q '^-' && hem_y='S' || hem_y='N'
+   echo "$lon" | grep -q '^-' && hem_x='W' || hem_x='E'
 
-      function padDigits(number, digits) {
-         return String(number).padStart(digits, "0");
-      }
+   grau_y=$(echo "$lat" | sed 's/^-//' | awk '{ printf "%02d", $1 }')
+   d_min_y=$(echo "$lat" | sed 's/^-//' | awk -v "grau_y=$grau_y" '{ printf "%.15f", ($1 - grau_y) * 60 }')
+   min_y=$(echo "$d_min_y" | awk '{ printf "%02d", $1 }')
+   seg_y=$(echo "$d_min_y" | awk -v "min_y=$min_y" '{ printf "%02d", ($1 - min_y) * 60 }')
 
-      // Exemplo de uso
-      var latitude = "$1";
-      var longitude = "$2";
+   grau_x=$(echo "$lon" | sed 's/^-//' | awk '{ printf "%03d", $1 }')
+   d_min_x=$(echo "$lon" | sed 's/^-//' | awk -v "grau_x=$grau_x" '{ printf "%.15f", ($1 - grau_x) * 60 }')
+   min_x=$(echo "$d_min_x" | awk '{ printf "%02d", $1 }')
+   seg_x=$(echo "$d_min_x" | awk -v "min_x=$min_x" '{ printf "%02d", ($1 - min_x) * 60 }')
 
-      var coordenadasGeograficas = converterCoordenadas(latitude, longitude);
-      console.log(coordenadasGeograficas);
-_EOF
+   echo "$hem_y$grau_y$min_y$seg_y $hem_x$grau_x$min_x$seg_x"
 }
 
 cartesianas() {
@@ -197,6 +107,11 @@ cartesianas() {
    else 
       lat="$1"
       lon="$2"
+
+      if [ -z "$1" ] || [ -z "$2" ]
+      then
+         echo "cartesianas(): argumentos insuficientes. " >&2
+      fi 
    fi 
 
    hy=$(echo $lat | cut -c1)
@@ -238,78 +153,113 @@ extrairContorno() {
 }
 
 pontoDentro() {
-   coords=$(cartesianas "$1" "$2")
-   lat=$(echo "$coords" | awk '{ print $1 }')
-   lon=$(echo "$coords" | awk '{ print $2 }')
    fir=$(extrairContorno)
+   ponto=$(cartesianas "$1" "$2")
+   ponto=$(echo "[$ponto]" | sed 's/[[:blank:]][[:blank:]]*/, /')
 
-   node <<_EOF 
-   var pointIn = require('./pointinpoly').pointInPoly;
-   console.log("$lat, $lon")
-   console.log(pointIn($lat, $lon, $fir));
+   node << _EOF
+   function pontoDentroDoPoligono(ponto, poligono) {
+      var minX = poligono[0][0];
+      var maxX = poligono[0][0];
+      var minY = poligono[0][1];
+      var maxY = poligono[0][1];
+
+      for (var i = 1; i < poligono.length; i++) {
+         var x = poligono[i][0];
+         var y = poligono[i][1];
+         minX = Math.min(x, minX);
+         maxX = Math.max(x, maxX);
+         minY = Math.min(y, minY);
+         maxY = Math.max(y, maxY);
+      }
+
+      if (ponto[0] < minX || ponto[0] > maxX || ponto[1] < minY || ponto[1] > maxY) {
+         return false;
+      }
+
+      var dentro = false;
+      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+         var xi = poligono[i][0];
+         var yi = poligono[i][1];
+         var xj = poligono[j][0];
+         var yj = poligono[j][1];
+
+         if ((yi > ponto[1]) !== (yj > ponto[1]) && ponto[0] < ((xj - xi) * (ponto[1] - yi)) / (yj - yi) + xi) {
+            dentro = !dentro;
+         }
+
+         if (ponto[0] === xi && ponto[1] === yi) {
+            return "limit";
+         }
+      }
+
+      return dentro;
+   }
+
+   var ponto = $ponto;
+   var poligono = $fir;
+
+   var resultado = pontoDentroDoPoligono(ponto, poligono);
+   console.log(resultado);
 _EOF
 }
 
 cruzFronteira() {
    node << _EOF
-   // Função para calcular a interseção entre dois segmentos de reta
-function calcularIntersecao(pontoA, pontoB, pontoC, pontoD) {
-  var ua, ub, denomitor;
+   function calcularIntersecao(pontoA, pontoB, pontoC, pontoD) {
+      var ua, ub, denomitor;
 
-  denomitor = (pontoD[1] - pontoC[1]) * (pontoB[0] - pontoA[0]) - (pontoD[0] - pontoC[0]) * (pontoB[1] - pontoA[1]);
-  ua = ((pontoD[0] - pontoC[0]) * (pontoA[1] - pontoC[1]) - (pontoD[1] - pontoC[1]) * (pontoA[0] - pontoC[0])) / denomitor;
-  ub = ((pontoB[0] - pontoA[0]) * (pontoA[1] - pontoC[1]) - (pontoB[1] - pontoA[1]) * (pontoA[0] - pontoC[0])) / denomitor;
+      denomitor = (pontoD[1] - pontoC[1]) * (pontoB[0] - pontoA[0]) - (pontoD[0] - pontoC[0]) * (pontoB[1] - pontoA[1]);
+      ua = ((pontoD[0] - pontoC[0]) * (pontoA[1] - pontoC[1]) - (pontoD[1] - pontoC[1]) * (pontoA[0] - pontoC[0])) / denomitor;
+      ub = ((pontoB[0] - pontoA[0]) * (pontoA[1] - pontoC[1]) - (pontoB[1] - pontoA[1]) * (pontoA[0] - pontoC[0])) / denomitor;
 
-  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
-    var intersecaoX = pontoA[0] + ua * (pontoB[0] - pontoA[0]);
-    var intersecaoY = pontoA[1] + ua * (pontoB[1] - pontoA[1]);
-    return [intersecaoX, intersecaoY];
-  }
+      if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+         var intersecaoX = pontoA[0] + ua * (pontoB[0] - pontoA[0]);
+         var intersecaoY = pontoA[1] + ua * (pontoB[1] - pontoA[1]);
+         return [intersecaoX, intersecaoY];
+      }
 
-  return null;
-}
+      return null;
+   }
 
-// Função para verificar se um ponto está dentro de um polígono
-function pontoDentroDoPoligono(ponto, poligono) {
-  var intersecoes = 0;
+   function pontoDentroDoPoligono(ponto, poligono) {
+      var intersecoes = 0;
 
-  for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-    if ((poligono[i][1] > ponto[1]) !== (poligono[j][1] > ponto[1]) &&
-        ponto[0] < (poligono[j][0] - poligono[i][0]) * (ponto[1] - poligono[i][1]) / (poligono[j][1] - poligono[i][1]) + poligono[i][0]) {
-      intersecoes++;
-    }
-  }
+      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+         if ((poligono[i][1] > ponto[1]) !== (poligono[j][1] > ponto[1]) &&
+            ponto[0] < (poligono[j][0] - poligono[i][0]) * (ponto[1] - poligono[i][1]) / (poligono[j][1] - poligono[i][1]) + poligono[i][0]) {
+            intersecoes++;
+         }
+      }
 
-  return intersecoes % 2 !== 0;
-}
+      return intersecoes % 2 !== 0;
+   }
 
-// Função principal para calcular a interseção entre um segmento e um polígono
-function calcularIntersecaoSegmentoPoligono(segmento, poligono) {
-  var pontoA = segmento[0];
-  var pontoB = segmento[1];
+   function calcularIntersecaoSegmentoPoligono(segmento, poligono) {
+      var pontoA = segmento[0];
+      var pontoB = segmento[1];
 
-  var intersecoes = [];
+      var intersecoes = [];
 
-  for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-    var pontoC = poligono[i];
-    var pontoD = poligono[j];
+      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+         var pontoC = poligono[i];
+         var pontoD = poligono[j];
 
-    var intersecao = calcularIntersecao(pontoA, pontoB, pontoC, pontoD);
+         var intersecao = calcularIntersecao(pontoA, pontoB, pontoC, pontoD);
 
-    if (intersecao !== null) {
-      intersecoes.push(intersecao);
-    }
-  }
+         if (intersecao !== null) {
+            intersecoes.push(intersecao);
+         }
+      }
 
-  return intersecoes;
-}
+      return intersecoes;
+   }
 
-// Exemplo de uso
-var segmento = $1;
-var poligono = $2;
+   var segmento = $1;
+   var poligono = $2;
 
-var pontosIntersecao = calcularIntersecaoSegmentoPoligono(segmento, poligono);
-console.log(pontosIntersecao);
+   var pontosIntersecao = calcularIntersecaoSegmentoPoligono(segmento, poligono);
+   console.log(pontosIntersecao);
 _EOF
 }
 
@@ -475,7 +425,12 @@ aerovias() {
 
       while IFS=$'\t' read ponto la lo
       do 
-         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
+         laJ=$(echo "$la" | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+         loJ=$(echo "$lo" | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+
+         statusPonto=$(pontoDentro "$laJ" "$loJ")
+
+         if [ "$statusPonto" = "false" ] 
          then 
             primeiroPontoFora="$ponto"
          else 
@@ -497,7 +452,12 @@ aerovias() {
 
       while IFS=$'\t' read ponto la lo
       do 
-         if ! grep -q $ponto "../$nomeBase/fix_data" "../$nomeBase/navaid_data" 
+         laJ=$(echo "$la" | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+         loJ=$(echo "$lo" | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+
+         statusPonto=$(pontoDentro "$laJ" "$loJ")
+
+         if [ "$statusPonto" = "false" ] 
          then 
             primeiroPontoFora="$ponto"
          else 
@@ -513,28 +473,26 @@ aerovias() {
       done < "$i"
    done 
 
-   for i in * 
-   do 
-      echo "$i" | grep -qv '\.fase3$' && rm "$i"
-   done  
 
-   for i in *
-   do 
-      nome=$(echo "$i" | sed 's/\([^.]*\).*/\1/')
-      mv "$i" "$nome"
-   done
    
    fir=$(extrairContorno)
    n=0
 
-   for i in * 
+   for i in *
    do 
-      ponto0=$(sed -n '1p' "$i" | cut -f1)
-      ponto1=$(sed -n '2p' "$i" | cut -f1)
+      ponto1=$(sed -n '1p' "$i" | cut -f1)
+      laJ1=$(sed -n '1p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+      loJ1=$(sed -n '1p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+      statusPonto1=$(pontoDentro "$laJ1" "$loJ1")
 
-      if ! grep -q "$ponto0" "../$nomeBase/fix_data" "../$nomeBase/navaid_data"
+      ponto2=$(sed -n '2p' "$i" | cut -f1)
+      laJ2=$(sed -n '2p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+      loJ2=$(sed -n '2p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+      statusPonto2=$(pontoDentro "$laJ2" "$loJ2")
+
+      if [ "$statusPonto1" = "false" ] 
       then 
-         if grep -q "SBRE.*$ponto1" "../$nomeBase/firseg_data" 
+         if [ "$statusPonto2" = "limit" ]
          then 
             sed -i '1d' "$i"
          else 
@@ -547,15 +505,13 @@ aerovias() {
                done 
             )']'
 
+            echo "$segA" #
+
             cruzA=$(cruzFronteira "$segA" "$fir" | sed 's/[][ ]//g')
-            while [ -z "$cruzA" ] 
-            do 
-               sed -i '1d' "$i"
-               
-            done 
 
             cruzALatK=$(echo "$cruzA" | cut -d',' -f1)
             cruzALonK=$(echo "$cruzA" | cut -d',' -f2)
+            echo "$cruzALatK" "$cruzALonK" | tr '\n' '@' #
             cruzAG=$(geograficas "$cruzALatK" "$cruzALonK")
 
             cruzALat=$(echo "$cruzAG" | cut -f1)
@@ -563,11 +519,11 @@ aerovias() {
             pontoBase=$(coordsBase "$cruzALat" "$cruzALon")
             cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
             n=$((n+1))
-            #echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
+            echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
 
             cruzALat=$(echo "$cruzALat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
             cruzALon=$(echo "$cruzALon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-            sed -i "/$ponto0/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+            sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
          fi 
       fi 
    done 
@@ -578,6 +534,3 @@ aerovias() {
 limpar() {
    rm -r "$nomeBase"
 }
-
-aerovias
-#extrairContorno | sed 's/\], *\[/\n/g'
