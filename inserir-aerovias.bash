@@ -72,10 +72,11 @@ geograficas() {
    else 
       lat="$1"
       lon="$2"
-      
+
       if [ -z "$1" ] || [ -z "$2" ]
       then
          echo "geograficas(): argumentos insuficientes. " >&2
+         exit 1
       fi 
    fi
 
@@ -111,6 +112,7 @@ cartesianas() {
       if [ -z "$1" ] || [ -z "$2" ]
       then
          echo "cartesianas(): argumentos insuficientes. " >&2
+         exit 1
       fi 
    fi 
 
@@ -134,133 +136,123 @@ cartesianas() {
 }
 
 extrairContorno() {
-   printf "["
-
    test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
    awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
    while read linha
    do 
-      echo "$linha" | cartesianas | sed -e 's/^ */[/' -e 's/ *$/], /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
+      echo "$linha" | cartesianas | sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
    done 
 
    test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
    head -n1 |  
    awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
    cartesianas | 
-   sed -e 's/^ */[/' -e 's/ *$/], /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
-
-   printf "]"
+   sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
 }
 
+fir=$(extrairContorno)
+
 pontoDentro() {
-   fir=$(extrairContorno)
-   ponto=$(cartesianas "$1" "$2")
-   ponto=$(echo "[$ponto]" | sed 's/[[:blank:]][[:blank:]]*/, /')
+   coords=$(cartesianas "$1" "$2")
+   lat=$(echo "$coords" | awk '{ print $1 }')
+   lon=$(echo "$coords" | awk '{ print $2 }')
 
-   node << _EOF
-   function pontoDentroDoPoligono(ponto, poligono) {
-      var minX = poligono[0][0];
-      var maxX = poligono[0][0];
-      var minY = poligono[0][1];
-      var maxY = poligono[0][1];
-
-      for (var i = 1; i < poligono.length; i++) {
-         var x = poligono[i][0];
-         var y = poligono[i][1];
-         minX = Math.min(x, minX);
-         maxX = Math.max(x, maxX);
-         minY = Math.min(y, minY);
-         maxY = Math.max(y, maxY);
-      }
-
-      if (ponto[0] < minX || ponto[0] > maxX || ponto[1] < minY || ponto[1] > maxY) {
-         return false;
-      }
-
-      var dentro = false;
-      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-         var xi = poligono[i][0];
-         var yi = poligono[i][1];
-         var xj = poligono[j][0];
-         var yj = poligono[j][1];
-
-         if ((yi > ponto[1]) !== (yj > ponto[1]) && ponto[0] < ((xj - xi) * (ponto[1] - yi)) / (yj - yi) + xi) {
-            dentro = !dentro;
-         }
-
-         if (ponto[0] === xi && ponto[1] === yi) {
-            return "limit";
-         }
-      }
-
-      return dentro;
+   dentro() {
+   python3 << _EOF
+from shapely import geometry
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+point = Point($1, $2)
+polygon = Polygon([$3])
+print(polygon.contains(point))
+_EOF
    }
 
-   var ponto = $ponto;
-   var poligono = $fir;
-
-   var resultado = pontoDentroDoPoligono(ponto, poligono);
-   console.log(resultado);
+   borda() {
+   python3 << _EOF
+from shapely import geometry
+polygon = [$3] 
+line = geometry.LineString(polygon)
+point = geometry.Point($1, $2)
+print(line.contains(point))
 _EOF
+   }
+
+   dentro=$(dentro "$lat" "$lon" "$fir")
+   
+   if [ "$dentro" = "True" ]
+   then 
+      borda="False"
+   else 
+      borda=$(borda "$lat" "$lon" "$fir")
+   fi 
+
+   status=$(printf "$dentro$borda")
+
+   case $status in 
+      "TrueFalse")
+         echo "dentro"
+      ;;
+      "FalseTrue")
+         echo "borda"
+      ;;
+
+      "FalseFalse")
+         echo "fora"
+      ;;
+
+      *)
+         echo "pontoDentro(): pane" >&2
+         exit 1
+      ;;
+   esac
 }
 
 cruzFronteira() {
-   node << _EOF
-   function calcularIntersecao(pontoA, pontoB, pontoC, pontoD) {
-      var ua, ub, denomitor;
+   if [ "$#" -eq 0 ] 
+   then 
+      segmento=$(cat)
+   else 
+      segmento="$1"
 
-      denomitor = (pontoD[1] - pontoC[1]) * (pontoB[0] - pontoA[0]) - (pontoD[0] - pontoC[0]) * (pontoB[1] - pontoA[1]);
-      ua = ((pontoD[0] - pontoC[0]) * (pontoA[1] - pontoC[1]) - (pontoD[1] - pontoC[1]) * (pontoA[0] - pontoC[0])) / denomitor;
-      ub = ((pontoB[0] - pontoA[0]) * (pontoA[1] - pontoC[1]) - (pontoB[1] - pontoA[1]) * (pontoA[0] - pontoC[0])) / denomitor;
+      if [ -z "$1" ] 
+      then
+         echo "cruzFronteira(): argumentos insuficientes. " >&2
+         exit 1
+      fi 
+   fi 
 
-      if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
-         var intersecaoX = pontoA[0] + ua * (pontoB[0] - pontoA[0]);
-         var intersecaoY = pontoA[1] + ua * (pontoB[1] - pontoA[1]);
-         return [intersecaoX, intersecaoY];
-      }
-
-      return null;
-   }
-
-   function pontoDentroDoPoligono(ponto, poligono) {
-      var intersecoes = 0;
-
-      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-         if ((poligono[i][1] > ponto[1]) !== (poligono[j][1] > ponto[1]) &&
-            ponto[0] < (poligono[j][0] - poligono[i][0]) * (ponto[1] - poligono[i][1]) / (poligono[j][1] - poligono[i][1]) + poligono[i][0]) {
-            intersecoes++;
-         }
-      }
-
-      return intersecoes % 2 !== 0;
-   }
-
-   function calcularIntersecaoSegmentoPoligono(segmento, poligono) {
-      var pontoA = segmento[0];
-      var pontoB = segmento[1];
-
-      var intersecoes = [];
-
-      for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-         var pontoC = poligono[i];
-         var pontoD = poligono[j];
-
-         var intersecao = calcularIntersecao(pontoA, pontoB, pontoC, pontoD);
-
-         if (intersecao !== null) {
-            intersecoes.push(intersecao);
-         }
-      }
-
-      return intersecoes;
-   }
-
-   var segmento = $1;
-   var poligono = $2;
-
-   var pontosIntersecao = calcularIntersecaoSegmentoPoligono(segmento, poligono);
-   console.log(pontosIntersecao);
+   poligona() {
+      python3 <<_EOF
+from shapely import geometry
+fir = [$fir] 
+polygon = geometry.Polygon(fir)
+print(polygon)
 _EOF
+   }
+
+   segmenta() {
+      python3 <<_EOF
+from shapely import geometry
+segmento = [$segmento] 
+line = geometry.LineString(segmento)
+print(line)
+_EOF
+   } 
+
+   pontoCruz() {
+      python3 << _EOF
+from shapely.wkt import loads
+poly = loads('$1')
+line = loads('$2')
+intersection = poly.exterior.intersection(line)
+print(intersection)
+_EOF
+   }
+
+   poligona=$(poligona)
+   segmenta=$(segmenta)
+   pontoCruz "$poligona" "$segmenta" | sed -e 's/POINT (//' -e 's/)//' 
 }
 
 coordsBase() {
@@ -287,7 +279,7 @@ coordsBase() {
    printf "$hem_y;$grau_y;$min_y;$seg_y;$hem_x;$grau_x;$min_x;$seg_x"
 }
 
-atualizarBalizas() {
+atualizarBalizas() { #latitudeSeg
    echo "Atualizando balizas..." >&2
 
    data=''
@@ -346,7 +338,7 @@ atualizarBalizas() {
       else 
          resultado=$(pontoDentro "$latitude" "$longitude")
 
-         if [ "$resultado" = "true" ]
+         if [ "$resultado" = "dentro" ] || [ "$resultado" = "borda" ]
          then 
             pontoBase=$(coordsBase "$latitude" "$longitude")
             tipoNaBase=''
@@ -416,7 +408,7 @@ aerovias() {
 
    for i in * 
    do 
-      cat -n "$i" | sort -uk2 | sort -nk1 | cut --complement -f1 > "$i.fase1"
+      cat -n "$i" | sort -uk2 | sort -nk1 | cut --complement -f1 > "$i.fase1" # todos tem q ter
    done 
 
    for i in *.fase1
@@ -430,7 +422,7 @@ aerovias() {
 
          statusPonto=$(pontoDentro "$laJ" "$loJ")
 
-         if [ "$statusPonto" = "false" ] 
+         if [ "$statusPonto" = "fora" ] 
          then 
             primeiroPontoFora="$ponto"
          else 
@@ -457,7 +449,7 @@ aerovias() {
 
          statusPonto=$(pontoDentro "$laJ" "$loJ")
 
-         if [ "$statusPonto" = "false" ] 
+         if [ "$statusPonto" = "fora" ] 
          then 
             primeiroPontoFora="$ponto"
          else 
@@ -471,62 +463,114 @@ aerovias() {
             break
          fi 
       done < "$i"
-   done 
+   done
 
-
-   
-   fir=$(extrairContorno)
    n=0
 
-   for i in *
+   for i in *.fase3 
    do 
-      ponto1=$(sed -n '1p' "$i" | cut -f1)
-      laJ1=$(sed -n '1p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
-      loJ1=$(sed -n '1p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
-      statusPonto1=$(pontoDentro "$laJ1" "$loJ1")
+      ponto1=$(sed -n '1p' "$i")
+      latitudePonto1=$(echo "$ponto1" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+      longitudePonto1=$(echo "$ponto1" | cut -f3 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+      statusPonto1=$(pontoDentro "$latitudePonto1" "$longitudePonto1")
 
-      ponto2=$(sed -n '2p' "$i" | cut -f1)
-      laJ2=$(sed -n '2p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
-      loJ2=$(sed -n '2p' "$i" | cut -f2 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
-      statusPonto2=$(pontoDentro "$laJ2" "$loJ2")
-
-      if [ "$statusPonto1" = "false" ] 
+      if [ "$statusPonto1" = "fora" ]
       then 
-         if [ "$statusPonto2" = "limit" ]
+         ponto2=$(sed -n '2p' "$i")
+         latitudePonto2=$(echo "$ponto2" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+         longitudePonto2=$(echo "$ponto2" | cut -f3 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+         statusPonto2=$(pontoDentro "$latitudePonto2" "$longitudePonto2")
+
+         if [ "$statusPonto2" = "borda" ]
          then 
-            sed -i '1d' "$i"
-         else 
-            segA='['$(
-               head -n2 "$i" | 
-               awk -F '(\t|  *)' '{ printf "%s\t%s%02d%02d%02.f\t%s%03d%02d%02.f\n", $1, $2, $3, $4, $5, $6, $7, $8, $9 }' | 
-               while read nome lat lon
-               do 
-                  cartesianas "$lat" "$lon" | sed -e 's/^/[/' -e 's/$/], /' -e 's/[[:blank:]]\{1,\}/, /'
-               done 
-            )']'
+            tac "$i" | sed "/$ponto2/q" > "$i.fase4"
+         elif [ "$statusPonto2" = "dentro" ]
+         then 
+            cartesianasPonto1=$(cartesianas "$latitudePonto1" "$longitudePonto1")
+            cartesianasPonto2=$(cartesianas "$latitudePonto2" "$longitudePonto2")
 
-            echo "$segA" #
+            ponto1Segmento=$(echo "$cartesianasPonto1" | sed -e 's/.*/(&)/' -e 's/ /, /' -e 's/ *)$/)/')
+            ponto2Segmento=$(echo "$cartesianasPonto2" | sed -e 's/.*/(&)/' -e 's/ /, /' -e 's/ *)$/)/')
+            segmento=$(echo "$ponto1Segmento, $ponto2Segmento")
 
-            cruzA=$(cruzFronteira "$segA" "$fir" | sed 's/[][ ]//g')
+            pontoCruz=$(cruzFronteira "$segmento")
+            echo "$pontoCruz"
+            pontoCruzLat=$(echo "$pontoCruz" | cut -d' ' -f1)
+            pontoCruzLon=$(echo "$pontoCruz" | cut -d' ' -f2)
 
-            cruzALatK=$(echo "$cruzA" | cut -d',' -f1)
-            cruzALonK=$(echo "$cruzA" | cut -d',' -f2)
-            echo "$cruzALatK" "$cruzALonK" | tr '\n' '@' #
-            cruzAG=$(geograficas "$cruzALatK" "$cruzALonK")
+            pontoCruzGeo=$(geograficas "$pontoCruzLat" "$pontoCruzLon")
+            pontoCruzGeoLat=$(echo "$pontoCruzGeo" | cut -d' ' -f1)
+            pontoCruzGeoLon=$(echo "$pontoCruzGeo" | cut -d' ' -f2)
 
-            cruzALat=$(echo "$cruzAG" | cut -f1)
-            cruzALon=$(echo "$cruzAG" | cut -f2)
-            pontoBase=$(coordsBase "$cruzALat" "$cruzALon")
+            pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
             cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
             n=$((n+1))
             echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
 
-            cruzALat=$(echo "$cruzALat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-            cruzALon=$(echo "$cruzALon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+
             sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+            tac "$i" > "$i.fase4"
+         else
+            echo "aerovias(): pane: $status" >&2
          fi 
+      else 
+         tac "$i" > "$i.fase4"
       fi 
    done 
+
+   for i in *.fase4 
+   do 
+      ponto1=$(sed -n '1p' "$i")
+      latitudePonto1=$(echo "$ponto1" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+      longitudePonto1=$(echo "$ponto1" | cut -f3 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+      statusPonto1=$(pontoDentro "$latitudePonto1" "$longitudePonto1")
+
+      if [ "$statusPonto1" = "fora" ]
+      then 
+         ponto2=$(sed -n '2p' "$i")
+         latitudePonto2=$(echo "$ponto2" | cut -f2 | awk -F' ' '{ printf "%s%02d%02d%02.f", $1, $2, $3, $4 }')
+         longitudePonto2=$(echo "$ponto2" | cut -f3 | awk -F' ' '{ printf "%s%03d%02d%02.f", $1, $2, $3, $4 }')
+         statusPonto2=$(pontoDentro "$latitudePonto2" "$longitudePonto2")
+
+         if [ "$statusPonto2" = "borda" ]
+         then 
+            tac "$i" | sed "/$ponto2/q" > "$i.fase5"
+         elif [ "$statusPonto2" = "dentro" ]
+         then 
+            cartesianasPonto1=$(cartesianas "$latitudePonto1" "$longitudePonto1")
+            cartesianasPonto2=$(cartesianas "$latitudePonto2" "$longitudePonto2")
+
+            ponto1Segmento=$(echo "$cartesianasPonto1" | sed -e 's/.*/(&)/' -e 's/ /, /' -e 's/ *)$/)/')
+            ponto2Segmento=$(echo "$cartesianasPonto2" | sed -e 's/.*/(&)/' -e 's/ /, /' -e 's/ *)$/)/')
+            segmento=$(echo "$ponto1Segmento, $ponto2Segmento")
+
+            pontoCruz=$(cruzFronteira "$segmento")
+            pontoCruzLat=$(echo "$pontoCruz" | cut -d' ' -f1)
+            pontoCruzLon=$(echo "$pontoCruz" | cut -d' ' -f2)
+
+            pontoCruzGeo=$(geograficas "$pontoCruzLat" "$pontoCruzLon")
+            pontoCruzGeoLat=$(echo "$pontoCruzGeo" | cut -d' ' -f1)
+            pontoCruzGeoLon=$(echo "$pontoCruzGeo" | cut -d' ' -f2)
+
+            pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
+            cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
+            n=$((n+1))
+            echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
+
+            cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+
+            sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+            tac "$i" > "$i.fase5"
+         else
+            echo "aerovias(): pane: $status" >&2
+         fi 
+      else 
+         tac "$i" > "$i.fase5"
+      fi 
+   done
 
    cd ..
 }
