@@ -1,5 +1,8 @@
 #! /bin/bash -
 
+# (c) 2023
+#  @arthurfelixgr
+
 if [ "$#" -eq 2 ]
 then 
    if file "$2" | grep -q '\(ASCII\|CSV\)' && file "$1" | grep -q 'tar archive'
