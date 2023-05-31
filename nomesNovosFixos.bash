@@ -19,7 +19,7 @@ then
 
    if ! file "$1" | grep -q '\(ASCII\|CSV\)'
    then 
-      echo "Arquivo de aerovias inválido." >&2
+      echo "Planilha inválida." >&2
       exit 1
    fi 
 
