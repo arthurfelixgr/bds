@@ -177,6 +177,7 @@ empacotarBase() {
 
 extrairBase "$base"
 criaFixos
+criaSetores
 nomesPontos
 setoresBase
 empacotarBase
