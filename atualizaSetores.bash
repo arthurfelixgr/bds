@@ -1,5 +1,8 @@
 #! /bin/bash -
 
+# (c) 2023
+#  @arthurfelixgr
+
 # ./setores.bash setores aerovias base
 
 if [ "$#" -eq 3 ]
