@@ -1,7 +1,7 @@
 #! /bin/bash -
 
 # (c) 2023
-#  @arthurfelixgr
+#    @arthurfelixgr
 
 if [ "$#" -eq 2 ]
 then 
@@ -77,12 +77,14 @@ verificaNomes() {
       nomeNovo=$(echo "$linha" | cut -f3)
       echo "$nomeAntigo $nomeNovo" 
 
-      grep "$nomeAntigo" "$nomeBase/fix_data"
-      #grep "$nomeNovo" "$nomeBase/fix_data"
+      #grep "$nomeAntigo" "$nomeBase/fix_data"
+      grep "$nomeNovo" "$nomeBase/fix_data"
+
    done < "$planilha"
 }
 
 atualizaNomes() {
+   echo "Atualizando nomes dos fixos..." >&2
    sed -i '/^[[:space:]]*$/d' "$planilha"
 
    while read linha
@@ -90,6 +92,9 @@ atualizaNomes() {
       nomeAntigo=$(echo "$linha" | cut -f1)
       nomeNovo=$(echo "$linha" | cut -f3)
       sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/fix_data"
+      sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/fix_jur_data"
+      sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/navaid_data"
+      sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/navaid_jur_data"
    done < "$planilha"
 }
 
@@ -102,7 +107,7 @@ empacotarBase() {
       [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
    done 
 
-   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%SP').tar" *.EXP
+   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%S').tar" *.EXP
    then 
       rm -r *.EXP
       cd ..
@@ -113,4 +118,5 @@ empacotarBase() {
    fi 
 }
 
-verificaNomes
+extrairBase "$base"
+atualizaNomes
