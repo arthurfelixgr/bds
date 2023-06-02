@@ -1,5 +1,8 @@
 #! /bin/bash -
 
+# (c)2023
+#   @arthurfelixgr
+
 # Uso:
 #   $ ./inserir-aerovias.bash planilha-crua base.tar
 
@@ -41,9 +44,14 @@ pwd=$PWD
 extrairBase() {
    echo "Extraindo a base $1..." >&2
    pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
-   mkdir -p "$pasta"
-   rm "$pasta"/*
-   tar -xf "$1" -C "$pasta"
+   rm -rf "$pasta"
+   mkdir "$pasta"
+
+   tar -xf "$1" -C "$pasta" || {
+      echo "extrairBase(): pane" >&2
+      exit 1
+   }
+   
    cd "$pasta"
 
    for i in *
@@ -149,8 +157,6 @@ extrairContorno() {
    cartesianas | 
    sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
 }
-
-fir=$(extrairContorno)
 
 pontoDentro() {
    coords=$(cartesianas "$1" "$2")
@@ -285,10 +291,10 @@ atualizarBalizas() { #latitudeSeg
    data=''
    jur=''
 
-   totalBalizas=$(awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 0 { print $3, $4, $5, $6, "\n", $7, $8, $9, $10 }' "$planilha" | sed -e 's/^[[:blank:]]*//' | grep -v '^[[:space:]]*$' | sort -uk2,2 | wc -l)
+   totalBalizas=$(awk -F ' *\t *' -v 'OFS=\t' 'NF > 0 { print $2, $3, $4, $5, "\n", $6, $7, $8, $9 }' "$planilha" | sed -e 's/^[[:blank:]]*//' | grep -v '^[[:space:]]*$' | sort -uk2,2 | wc -l)
    nBaliza=0
 
-   awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 0 { print $3, $4, $5, $6, "\n", $7, $8, $9, $10 }' "$planilha" | 
+   awk -F ' *\t *' -v 'OFS=\t' 'NF > 0 { print $2, $3, $4, $5, "\n", $6, $7, $8, $9 }' "$planilha" | 
    sed -e 's/^[[:blank:]]*//' | 
    grep -v '^[[:space:]]*$' | 
    sort -uk2,2 | 
@@ -299,15 +305,21 @@ atualizarBalizas() { #latitudeSeg
 
       if echo "$tipo" | grep -qiE '(VOR|NDB|DME)' 
       then 
+         tipo=$(echo "$tipo" | sed 's/[[:space:]]//g')
          arq="$nomeBase/navaid_data"
          jur="$nomeBase/navaid_jur_data"
       elif echo "$tipo" | grep -qi 'waypoint' 
       then 
-         arq="$nomeBase/fix_data"
-         jur="$nomeBase/fix_jur_data"
-      else 
-         echo "$nome: erro no tipo da baliza ($tipo). Verifique o arquivo $planilha e reinicie o processo. " >&2
-         exit 1
+         if echo "$nome" | grep q '[0-9]'
+         then 
+            tipo='waypoint'
+            arq="$nomeBase/waypoint_data"
+            jur="$nomeBase/waypoint_jur_data"
+         else 
+            tipo='fixo'
+            arq="$nomeBase/fix_data"
+            jur="$nomeBase/fix_jur_data"
+         fi 
       fi 
 
       latitude=$(echo "$latitude" | sed 's/[[:blank:]]*//g')
@@ -356,8 +368,12 @@ atualizarBalizas() { #latitudeSeg
                   tipoNaBase='NAV_VD'
                ;;
 
-               'Waypoint')
+               'fixo')
                   tipoNaBase='FIX'
+               ;;
+
+               'waypoint')
+                  tipoNaBase='WAY_PT'
                ;;
 
                *)
@@ -383,7 +399,7 @@ empacotarBase() {
       [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
    done 
 
-   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%SP').tar" *.EXP
+   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%S').tar" *.EXP
    then 
       rm -r *.EXP
       cd ..
@@ -394,12 +410,13 @@ empacotarBase() {
    fi 
 }
 
-aerovias() {
+recortar() {
    mkdir -p awys
-   rm -f awys/*
+   rm -f awys/* 
 
-   awk -F '(\t| *, *)' -v 'OFS=\t' 'NF > 2 { print $1, $4, $5, $6, $8, $9, $10 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo1 p2 la2 lo2
+   awk -F ' *\t *' -v 'OFS=\t' 'NF > 2 { print $1, $3, $4, $5, $7, $8, $9 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo1 p2 la2 lo2
    do 
+      awy=$(echo "$awy" | sed 's/[[:space:]]//g')
       printf "$p1\t$la1\t$lo1\n$p2\t$la2\t$lo2\n" >> "awys/$awy"
    done 
 
@@ -494,7 +511,6 @@ aerovias() {
             segmento=$(echo "$ponto1Segmento, $ponto2Segmento")
 
             pontoCruz=$(cruzFronteira "$segmento")
-            echo "$pontoCruz"
             pontoCruzLat=$(echo "$pontoCruz" | cut -d' ' -f1)
             pontoCruzLon=$(echo "$pontoCruz" | cut -d' ' -f2)
 
@@ -503,14 +519,23 @@ aerovias() {
             pontoCruzGeoLon=$(echo "$pontoCruzGeo" | cut -d' ' -f2)
 
             pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
-            cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
-            n=$((n+1))
-            echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
+            
+            if resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/navaid_data")
+            then  
+               nomePonto=$(echo "$resutado" | cut -d';' -f1)
+               latPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
+               lonPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
+               sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
+            else 
+               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/' -e 's/1/H/' -e 's/2/I/' -e 's/3/J/' -e 's/4/K/' -e 's/5/L/' -e 's/6/M/' -e 's/7/N/' -e 's/8/O/' -e 's/9/P/' )
+               n=$((n+1))
+               echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> FRE.fix_data
 
-            cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-            cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+               cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+               cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+               sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+            fi 
 
-            sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
             tac "$i" > "$i.fase4"
          else
             echo "aerovias(): pane: $status" >&2
@@ -555,14 +580,23 @@ aerovias() {
             pontoCruzGeoLon=$(echo "$pontoCruzGeo" | cut -d' ' -f2)
 
             pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
-            cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }')
-            n=$((n+1))
-            echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" # >> "../$nomeBase/fix_data"
 
-            cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-            cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+            if resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/navaid_data")
+            then  
+               nomePonto=$(echo "$resutado" | cut -d';' -f1)
+               latPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
+               lonPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
+               sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
+            else 
+               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/' -e 's/1/H/' -e 's/2/I/' -e 's/3/J/' -e 's/4/K/' -e 's/5/L/' -e 's/6/M/' -e 's/7/N/' -e 's/8/O/' -e 's/9/P/' )
+               n=$((n+1))
+               echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$pwd/$nomeBase/fix_data"
 
-            sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+               cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+               cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
+               sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+            fi
+
             tac "$i" > "$i.fase5"
          else
             echo "aerovias(): pane: $status" >&2
@@ -572,9 +606,68 @@ aerovias() {
       fi 
    done
 
+   for i in * 
+   do 
+      echo "$i" | grep -qv '\.fase5$' && rm "$i"
+   done  
+
+   for i in *
+   do 
+      nome=$(echo "$i" | sed 's/\([^.]*\).*/\1/')
+      mv "$i" "$nome"
+   done 
+
+   cd ..
+}
+
+inserir() {
+   cd awys
+   rm -f *.base
+
+   for i in * 
+   do 
+      n=2
+      while read nome lat lon 
+      do 
+         fixoAtual=$(echo $nome)
+         fixoSeguinte=$(sed -n "$n"p "$i" | cut -f1)
+         echo "$fixoAtual $fixoSeguinte" 
+         n=$((n+1))
+      done < "$i" | sed '$d' > "$i.base"
+   done 
+
+   #UL206;AIRWAY;;0;9;NEMOL;BUGAT;1;1;250;999;0;0;NULO;;
+   #  Z36;AIRWAY;;0;5;MUGAV;ILVUS;1;1;145;245;0;0;NULO;;
+   for i in *.base 
+   do 
+      aerovia=$(echo "$i" | sed 's/\(.*\)\..*$/\1/') 
+      sed -i "/^$aerovia;/d" "$pwd/$nomeBase/airway_data"
+
+      if echo "$aerovia" | grep -q '^U' 
+      then 
+         nivInf='250'
+         nivSup='999'
+      else 
+         nivInf='145'
+         nivSup='245'
+      fi 
+
+      n=1
+      while read p1 p2
+      do 
+         echo "$aerovia;AIRWAY;;0;$n;$p1;$p2;1;1;$nivInf;$nivSup;0;0;NULO;;" >> "$pwd/$nomeBase/airway_data" 
+         n=$((n+1))
+      done < "$i"
+   done 
+
    cd ..
 }
 
 limpar() {
    rm -r "$nomeBase"
 }
+
+#fir=$(extrairContorno)
+#atualizarBalizas
+#inserir
+empacotarBase
