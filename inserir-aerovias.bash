@@ -1,8 +1,5 @@
 #! /bin/bash -
 
-# (c)2023
-#   @arthurfelixgr
-
 # Uso:
 #   $ ./inserir-aerovias.bash planilha-crua base.tar
 
@@ -41,7 +38,7 @@ base="$2"
 nomeBase=$(tar -tf "$base" | head -n1 | cut -d'_' -f1)
 pwd=$PWD
 
-extrairBase() {
+extrairBase() { 
    echo "Extraindo a base $1..." >&2
    pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
    rm -rf "$pasta"
@@ -71,7 +68,7 @@ extrairBase() {
    echo "Extração completa." >&2
 }
 
-geograficas() {
+geograficas() { #auxiliar
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -107,7 +104,7 @@ geograficas() {
    echo "$hem_y$grau_y$min_y$seg_y $hem_x$grau_x$min_x$seg_x"
 }
 
-cartesianas() {
+cartesianas() { #auxiliar
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -143,7 +140,7 @@ cartesianas() {
    printf "%s %s" "$latCart" "$lonCart"
 }
 
-extrairContorno() {
+extrairContorno() { #auxiliar para variável "fir"
    test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
    awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
    while read linha
@@ -158,7 +155,7 @@ extrairContorno() {
    sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
 }
 
-pontoDentro() {
+pontoDentro() { #auxiliar
    coords=$(cartesianas "$1" "$2")
    lat=$(echo "$coords" | awk '{ print $1 }')
    lon=$(echo "$coords" | awk '{ print $2 }')
@@ -214,7 +211,7 @@ _EOF
    esac
 }
 
-cruzFronteira() {
+cruzFronteira() { #auxiliar
    if [ "$#" -eq 0 ] 
    then 
       segmento=$(cat)
@@ -261,7 +258,7 @@ _EOF
    pontoCruz "$poligona" "$segmenta" | sed -e 's/POINT (//' -e 's/)//' 
 }
 
-coordsBase() {
+coordsBase() { #auxiliar
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -310,7 +307,7 @@ atualizarBalizas() { #latitudeSeg
          jur="$nomeBase/navaid_jur_data"
       elif echo "$tipo" | grep -qi 'waypoint' 
       then 
-         if echo "$nome" | grep q '[0-9]'
+         if echo "$nome" | grep -q '[0-9]'
          then 
             tipo='waypoint'
             arq="$nomeBase/waypoint_data"
@@ -388,26 +385,6 @@ atualizarBalizas() { #latitudeSeg
    done
 
    echo "Balizas atualizadas. " >&2
-}
-
-empacotarBase() {
-   echo "Empacotando a base... " >&2
-   cd "$nomeBase"
-
-   for i in *
-   do 
-      [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
-   done 
-
-   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%S').tar" *.EXP
-   then 
-      rm -r *.EXP
-      cd ..
-      echo "Pacote criado com sucesso! " >&2
-   else 
-      echo "Erro na criação do pacote. " >&2
-      exit 1
-   fi 
 }
 
 recortar() {
@@ -520,22 +497,22 @@ recortar() {
 
             pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
             
-            if resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/navaid_data")
+            if resultado=$(grep "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/navaid_data")
             then  
-               nomePonto=$(echo "$resutado" | cut -d';' -f1)
-               latPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
-               lonPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
+               nomePonto=$(echo "$resultado" | cut -d';' -f1)
+               latPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
+               lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
             else 
-               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/' -e 's/1/H/' -e 's/2/I/' -e 's/3/J/' -e 's/4/K/' -e 's/5/L/' -e 's/6/M/' -e 's/7/N/' -e 's/8/O/' -e 's/9/P/' )
+               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
                n=$((n+1))
-               echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> FRE.fix_data
+               echo "$cruzANome;;$cruzANome;FIX;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$pwd/$nomeBase/fix_data"
 
                cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
             fi 
-
+            
             tac "$i" > "$i.fase4"
          else
             echo "aerovias(): pane: $status" >&2
@@ -580,23 +557,23 @@ recortar() {
             pontoCruzGeoLon=$(echo "$pontoCruzGeo" | cut -d' ' -f2)
 
             pontoBase=$(coordsBase "$pontoCruzGeoLat" "$pontoCruzGeoLon")
-
-            if resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep -q "$pontoBase" "$pwd/$nomeBase/navaid_data")
+            
+            if resultado=$(grep "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/navaid_data")
             then  
-               nomePonto=$(echo "$resutado" | cut -d';' -f1)
-               latPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
-               lonPonto=$(echo "$resutado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
+               nomePonto=$(echo "$resultado" | cut -d';' -f1)
+               latPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
+               lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
             else 
-               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/' -e 's/1/H/' -e 's/2/I/' -e 's/3/J/' -e 's/4/K/' -e 's/5/L/' -e 's/6/M/' -e 's/7/N/' -e 's/8/O/' -e 's/9/P/' )
+               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
                n=$((n+1))
-               echo "$cruzANome;;$cruzANome;FIX;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$pwd/$nomeBase/fix_data"
+               echo "$cruzANome;;$cruzANome;FIX;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$pwd/$nomeBase/fix_data"
 
                cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
             fi
-
+            
             tac "$i" > "$i.fase5"
          else
             echo "aerovias(): pane: $status" >&2
@@ -663,11 +640,33 @@ inserir() {
    cd ..
 }
 
+empacotarBase() {
+   echo "Empacotando a base... " >&2
+   cd "$nomeBase"
+
+   for i in *
+   do 
+      [ "$i" != "INFO" ] && gzip -9 < "$i" > "$nomeBase"_"$i.EXP" || cp "$i" "$nomeBase"_"$i.EXP"
+   done 
+
+   if tar -cf "../$nomeBase-$(date -u '+%Y%m%d_%H%M%S').tar" *.EXP
+   then 
+      rm -r *.EXP
+      cd ..
+      echo "Pacote criado com sucesso! " >&2
+   else 
+      echo "Erro na criação do pacote. " >&2
+      exit 1
+   fi 
+}
+
 limpar() {
    rm -r "$nomeBase"
 }
 
-#fir=$(extrairContorno)
-#atualizarBalizas
-#inserir
+#extrairBase "$base"
+fir=$(extrairContorno)
+atualizarBalizas
+recortar
+inserir
 empacotarBase
