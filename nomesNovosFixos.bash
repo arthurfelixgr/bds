@@ -1,7 +1,7 @@
 #! /bin/bash -
 
 # (c) 2023
-#    @arthurfelixgr
+#   @arthurfelixgr
 
 if [ "$#" -eq 2 ]
 then 
@@ -95,6 +95,8 @@ atualizaNomes() {
       sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/fix_jur_data"
       sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/navaid_data"
       sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/navaid_jur_data"
+      sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/waypoint_data"
+      sed -i "/$nomeAntigo/s/$nomeAntigo/$nomeNovo/g" "$nomeBase/waypoint_jur_data"
    done < "$planilha"
 }
 
@@ -120,3 +122,4 @@ empacotarBase() {
 
 extrairBase "$base"
 atualizaNomes
+#empacotarBase
