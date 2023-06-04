@@ -1,5 +1,8 @@
 #! /bin/bash -
 
+# (c) 2023
+#   @arthurfelixgr
+
 # Uso:
 #   $ ./inserir-aerovias.bash planilha-crua base.tar
 
@@ -270,6 +273,7 @@ coordsBase() { #auxiliar
 }
 
 recortar() {
+   echo "Delimitando as aerovias: " >&2
    mkdir -p awys
    rm -f awys/* 
 
@@ -282,13 +286,23 @@ recortar() {
    cd awys
    sed -i '/^[[:space:]]*$/d' *
 
+   totalAwys=$(ls | wc -l)
+   numAwys=0
+
    for i in *
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 0/5: aerovia $numAwys/$totalAwys..." >&2
       cat -n "$i" | sort -uk2 | sort -nk1 | cut --complement -f1 > "$i.fase0"
    done
 
+   numAwys=0
+
    for i in *.fase0
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 1/5: aerovia $numAwys/$totalAwys..." >&2
+
       while IFS=$'\t' read nome lat lon
       do 
          hem_y=$(echo "$lat" | cut -d' ' -f1)
@@ -328,8 +342,13 @@ recortar() {
       done < "$i"
    done 
 
+   numAwys=0
+
    for i in *.fase1
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 2/5: aerovia $numAwys/$totalAwys..." >&2
+
       primeiroPontoFora=''
 
       while IFS=$'\t' read ponto la lo
@@ -354,9 +373,15 @@ recortar() {
          fi 
       done < "$i"
    done
+
+   totalAwys=$(ls *.fase2 | wc -l)
+   numAwys=0
    
    for i in *.fase2
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 3/5: aerovia $numAwys/$totalAwys..." >&2
+
       primeiroPontoFora=''
 
       while IFS=$'\t' read ponto la lo
@@ -381,11 +406,16 @@ recortar() {
          fi 
       done < "$i"
    done
-   
+
+   totalAwys=$(ls *.fase3 | wc -l)
+   numAwys=0
    n=0
 
    for i in *.fase3 
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 4/5: aerovia $numAwys/$totalAwys..." >&2
+
       ponto1=$(sed -n '1p' "$i")
       latitudePonto1=$(echo "$ponto1" | cut -f2 | sed 's/ //g')
       longitudePonto1=$(echo "$ponto1" | cut -f3 | sed 's/ //g')
@@ -437,14 +467,21 @@ recortar() {
             tac "$i" > "$i.fase4"
          else
             echo "aerovias(): pane: $status" >&2
+            exit 1
          fi 
       else 
          tac "$i" > "$i.fase4"
       fi 
    done 
 
+   totalAwys=$(ls *.fase4 | wc -l)
+   numAwys=0
+
    for i in *.fase4 
    do 
+      numAwys=$((numAwys+1))
+      echo "Fase 5/5: aerovia $numAwys/$totalAwys..." >&2
+
       ponto1=$(sed -n '1p' "$i")
       latitudePonto1=$(echo "$ponto1" | cut -f2 | sed 's/ //g')
       longitudePonto1=$(echo "$ponto1" | cut -f3 | sed 's/ //g')
@@ -496,6 +533,7 @@ recortar() {
             tac "$i" > "$i.fase5"
          else
             echo "aerovias(): pane: $status" >&2
+            exit 1
          fi 
       else 
          tac "$i" > "$i.fase5"
@@ -513,10 +551,13 @@ recortar() {
       mv "$i" "$nome"
    done 
 
+   totalAwys=$(ls | wc -l)
    cd ..
+   echo "$totalAwys aerovias delimitadas para esta FIR. " >&2
 }
 
 balizas() {
+   echo "Atualizando balizas: " >&2
    tail +13 "$nomeBase/waypoint_data" | sort -t';' -uk1,1 > footer.waypoint_data
    tail +13 "$nomeBase/fix_data" | sort -t';' -uk1,1 > footer.fix_data
    tail +13 "$nomeBase/navaid_data" | sort -t';' -uk1,1 > footer.navaid_data
@@ -600,22 +641,27 @@ balizas() {
          '-w')
             arq="$nomeBase/waypoint_data"
             footer="$pwd/footer.waypoint_data"
+            table='waypoints'
          ;;
 
          '-f')
             arq="$nomeBase/fix_data"
             footer="$pwd/footer.fix_data"
+            table='fixos'
          ;;
 
          '-a')
             arq="$nomeBase/navaid_data"
             footer="$pwd/footer.navaid_data"
+            table='auxílios'
          ;;
 
          *)
             echo "tabela(): sem argumentos" >&2
          ;;
       esac 
+
+      echo "Atualizando tabela de $table... " >&2
 
       sort -t';' -uk1,1 < "$footer" > footer
       head -n12 "$arq" > header
@@ -632,9 +678,12 @@ balizas() {
    tabela -w
    tabela -f
    tabela -a
+
+   echo "Balizas atualizadas! " >&2
 }
 
 inserir() {
+   echo "Atualizando aerovias... " >&2
    cd awys
    rm -f *.base
 
@@ -673,6 +722,7 @@ inserir() {
    done 
 
    cd ..
+   echo "Aerovias atualizadas! " >&2
 }
 
 empacotarBase() {
