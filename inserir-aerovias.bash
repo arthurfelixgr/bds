@@ -517,97 +517,121 @@ recortar() {
 }
 
 balizas() {
+   tail +13 "$nomeBase/waypoint_data" | sort -t';' -uk1,1 > footer.waypoint_data
+   tail +13 "$nomeBase/fix_data" | sort -t';' -uk1,1 > footer.fix_data
+   tail +13 "$nomeBase/navaid_data" | sort -t';' -uk1,1 > footer.navaid_data
+
    cd awys
 
    for i in *
    do 
       while IFS=$'\t' read nome lat lon
       do 
-         tipo=$(grep -m2 "$nome" "../$planilha" | tail -n1 | awk -F' *\t *' '{ print $2 }')
-         
-         if echo "$tipo" | grep -qi "waypoint" 
-         then
+         tipo=$(grep -Pom1 "[[:graph:]]{1,} *\t *$nome" "../$planilha" | awk -F' *\t *' '{print $1}')
+         arq=''
+
+         if echo "$tipo" | grep -qi "waypoint"
+         then 
             if echo "$nome" | grep -q '[0-9]'
             then 
-               tipo="waypoint"
-               arq="waypoint_data"
+               footer="$pwd/footer.waypoint_data"
+               tipoNaBase='WAY_PT'
             else 
-               tipo="fixo"
-               arq="fix_data"
+               footer="$pwd/footer.fix_data"
+               tipoNaBase='FIX'
             fi 
          else 
-            if echo "$nome" | grep -q '^FRE'
+            if echo "$tipo" | grep -qi "\(NDB\|VOR\|DME\)"
             then 
-               tipo="fixo"
-               arq="fix_data"
+               footer="$pwd/footer.navaid_data"
+
+               case "$tipo" in 
+                  'VOR')
+                     tipoNaBase='NAV_VOR'
+                  ;;
+
+                  'NDB')
+                     tipoNaBase='NAV_NDB'
+                  ;;
+
+                  'DME')
+                     tipoNaBase='NAV_VD'
+                  ;;
+               esac
             else 
-               arq="navaid_data"
-            fi 
+               if echo "$nome" | grep -q '^FRE'
+               then 
+                  footer="$pwd/footer.fix_data"
+                  tipoNaBase='FIX'
+               else 
+                  echo "Erro de tipo: $tipo em $nome" >&2
+                  exit 1
+               fi 
+            fi
          fi 
-         
-         case "$tipo" in
-            'VOR')
-               tipoNaBase='NAV_VOR'
-            ;;
 
-            'NDB')
-               tipoNaBase='NAV_NDB'
-            ;;
-
-            'DME')
-               tipoNaBase='NAV_VD'
-            ;;
-
-            'fixo')
-               tipoNaBase='FIX'
-            ;;
-
-            'waypoint')
-               tipoNaBase='WAY_PT'
-            ;;
-
-            *)
-               echo "$nome: erro no tipo da baliza ($tipo). Verifique o arquivo $planilha e reinicie o processo. " >&2
-               exit 1
-            ;;
-         esac
-         
-         lat=$(echo "$lat" | sed 's/ //g')
-         lon=$(echo "$lon" | sed 's/ //g')
+         lat=$(echo "$lat" | sed 's/[[:space:]]//g')
+         lon=$(echo "$lon" | sed 's/[[:space:]]//g')
          pontoBase=$(coordsBase "$lat" "$lon")
 
-         if grep -q "$nome" "$pwd/$nomeBase/$arq"
+         if grep -q "$pontoBase" "$footer"
          then 
-            sed -i "/$nome/s/[NS];\([0-9]\{1,2\};\)\{3\}[WE];[0-9]\{1,3\};\([0-9]\{1,2\};\)\{2\}/$pontoBase;/" "$pwd/$nomeBase/$arq"
+            sed -i "/$pontoBase/s/^[^;]*;\([^;]*\);[^;]*/$nome;\1;$nome/" "$footer"
          else 
-            if echo "$nome" | grep -q '^FRE'
+            if grep -q "^$nome;" "$footer"
             then 
-               echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> ../fixosAInserir
-            else 
-               if [ "$tipo" = "fixo" ]
-               then
-                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> ../fixosAInserir
+               sed -i "/$nome/s/[NS];\([0-9]\{1,2\};\)\{3\}[WE];[0-9]\{1,3\};\([0-9]\{1,2\};\)\{2\}/$pontoBase;/" "$footer" 
+            else # insere no footer
+               if echo "$nome" | grep -q '^FRE'
+               then 
+                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$footer"
                else 
-                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$pwd/$nomeBase/$arq"
+                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$footer"
                fi 
             fi 
          fi 
-         
       done < "$i"
    done 
 
    cd ..
-   tail +13 "$nomeBase/fix_data" >> fixosAInserir
-   sort -t';' -uk1,1 < fixosAInserir > footer
-   head -n12 "$nomeBase/fix_data" > header
 
-   while read linha
-   do 
-      echo "$linha" >> header
-   done < footer
+   tabela() {
+      case "$1" in 
+         '-w')
+            arq="$nomeBase/waypoint_data"
+            footer="$pwd/footer.waypoint_data"
+         ;;
 
-   mv header "$nomeBase/fix_data"
-   rm fixosAInserir footer
+         '-f')
+            arq="$nomeBase/fix_data"
+            footer="$pwd/footer.fix_data"
+         ;;
+
+         '-a')
+            arq="$nomeBase/navaid_data"
+            footer="$pwd/footer.navaid_data"
+         ;;
+
+         *)
+            echo "tabela(): sem argumentos" >&2
+         ;;
+      esac 
+
+      sort -t';' -uk1,1 < "$footer" > footer
+      head -n12 "$arq" > header
+
+      while read linha
+      do 
+         echo "$linha" >> header
+      done < footer
+
+      mv header "$arq"
+      rm "$footer" footer
+   }
+
+   tabela -w
+   tabela -f
+   tabela -a
 }
 
 inserir() {
