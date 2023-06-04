@@ -3,8 +3,10 @@
 # (c) 2023
 #   @arthurfelixgr
 
+#
 # Uso:
 #   $ ./inserir-aerovias.bash planilha-crua base.tar
+#
 
 if [ "$#" -eq 2 ]
 then 
