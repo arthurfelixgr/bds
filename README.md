@@ -1,6 +1,8 @@
 # bds
 ## Já é possível:
 
+* Determinar quais aerovias pertencem à FIR, e por onde entram e saem
+* Inserir os resultados na base
 * Tratar uma tabela de setores, eliminando problemas como pontos sem nome, pontos com nomes iguais e coordenadas diferentes e pontos com mesmas coordenadas e nomes diferentes. (setores.bash)
 * Converter as coordenadas de uma tabela de setores para o formato cartesiano (setores-cartesianos.bash)
 * Gerar uma tabela de setores fechados em formato cartesiano para auxiliar na projeção em aplicativos de análise geográfica (setores-fechados.bash)
@@ -41,5 +43,4 @@
 
 ## Afazeres:
 
-* Determinar quais aerovias pertencem à FIR, e por onde entram e saem
-* Criar scripts para inserção dos resultados na base
+* Automatizar inserção de TMA
