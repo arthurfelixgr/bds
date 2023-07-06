@@ -565,12 +565,12 @@ balizas() {
    tail +13 "$nomeBase/navaid_data" | sort -t';' -uk1,1 > footer.navaid_data
 
    cd awys
-
+   
    for i in *
    do 
       while IFS=$'\t' read nome lat lon
       do 
-         tipo=$(grep -Pom1 "[[:graph:]]{1,} *\t *$nome" "../$planilha" | awk -F' *\t *' '{print $1}')
+         tipo=$(grep -Pom1 "[[:graph:]]{1,} *\t *$nome[^[:graph:]]" "../$planilha" | awk -F' *\t *' '{print $1}')
          arq=''
 
          if echo "$tipo" | grep -qi "waypoint"
