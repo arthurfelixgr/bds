@@ -564,6 +564,8 @@ balizas() {
    tail +13 "$nomeBase/fix_data" | sort -t';' -uk1,1 > footer.fix_data
    tail +13 "$nomeBase/navaid_data" | sort -t';' -uk1,1 > footer.navaid_data
 
+   echo "Buscando balizas novas nas aerovias..." >&2
+
    cd awys
    
    for i in *
@@ -613,13 +615,18 @@ balizas() {
             fi
          fi 
 
-         lat=$(echo "$lat" | sed 's/[[:space:]]//g')
-         lon=$(echo "$lon" | sed 's/[[:space:]]//g')
-         pontoBase=$(coordsBase "$lat" "$lon")
+         latJ=$(echo "$lat" | sed 's/[[:space:]]//g')
+         lonJ=$(echo "$lon" | sed 's/[[:space:]]//g')
+         pontoBase=$(coordsBase "$latJ" "$lonJ")
 
          if grep -q "$pontoBase" "$footer"
          then 
             sed -i "/$pontoBase/s/^[^;]*;\([^;]*\);[^;]*/$nome;\1;$nome/" "$footer"
+
+            for i in *
+            do 
+               sed -i "/$lat\t$lon/s/^[[:upper:]]\{1,\}\t/$nome\t/" "$i"
+            done 
          else 
             if grep -q "^$nome;" "$footer"
             then 
