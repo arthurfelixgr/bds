@@ -294,7 +294,7 @@ recortar() {
    for i in *
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 0/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 0/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
       cat -n "$i" | sort -uk2 | sort -nk1 | cut --complement -f1 > "$i.fase0"
    done
 
@@ -303,7 +303,7 @@ recortar() {
    for i in *.fase0
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 1/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 1/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
 
       while IFS=$'\t' read nome lat lon
       do 
@@ -349,7 +349,7 @@ recortar() {
    for i in *.fase1
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 2/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 2/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
 
       primeiroPontoFora=''
 
@@ -382,7 +382,7 @@ recortar() {
    for i in *.fase2
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 3/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 3/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
 
       primeiroPontoFora=''
 
@@ -412,11 +412,13 @@ recortar() {
    totalAwys=$(ls *.fase3 | wc -l)
    numAwys=0
    n=0
+   rm -f ../.frxs
+   touch ../.frxs
 
    for i in *.fase3 
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 4/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 4/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
 
       ponto1=$(sed -n '1p' "$i")
       latitudePonto1=$(echo "$ponto1" | cut -f2 | sed 's/ //g')
@@ -459,11 +461,29 @@ recortar() {
                lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
             else 
-               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
-               n=$((n+1))
                cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-               sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+
+               if echo "$ponto1" | grep -Pq "$cruzALat\t$cruzALon"
+               then 
+                  tac "$i" > "$i.fase4"
+                  continue 
+               elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" #PONTO 1 TBM
+               then 
+                  tac "$i" | sed "/$ponto2/q" > "$i.fase4" 
+                  continue
+               else 
+                  if frx=$(grep -P "$cruzALat\t$cruzALon" ../.frxs)
+                  then 
+                     cruzANome=$(echo "$frx" | cut -f1)
+                  else 
+                     cruzANome=$(echo $n | awk '{ printf "FRX%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
+                     n=$((n+1))
+                     printf "$cruzANome\t$cruzALat\t$cruzALon\n" >> ../.frxs
+                  fi 
+
+                  sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+               fi 
             fi 
             
             tac "$i" > "$i.fase4"
@@ -482,7 +502,7 @@ recortar() {
    for i in *.fase4 
    do 
       numAwys=$((numAwys+1))
-      echo "Fase 5/5: aerovia $numAwys/$totalAwys..." >&2
+      echo -ne "Fase 5/5: aerovia $numAwys/$totalAwys...\033[0K\r" >&2
 
       ponto1=$(sed -n '1p' "$i")
       latitudePonto1=$(echo "$ponto1" | cut -f2 | sed 's/ //g')
@@ -525,11 +545,29 @@ recortar() {
                lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
             else 
-               cruzANome=$(echo $n | awk '{ printf "FRE%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
-               n=$((n+1))
                cruzALat=$(echo "$pontoCruzGeoLat" | sed 's/\([NS]\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
                cruzALon=$(echo "$pontoCruzGeoLon" | sed 's/\([WE]\)\([0-9]\{3\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2 \3 \4/')
-               sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+
+               if echo "$ponto1" | grep -Pq "$cruzALat\t$cruzALon"
+               then 
+                  tac "$i" > "$i.fase5"
+                  continue 
+               elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" 
+               then 
+                  tac "$i" | sed "/$ponto2/q" > "$i.fase5"
+                  continue  
+               else 
+                  if frx=$(grep -P "$cruzALat\t$cruzALon" ../.frxs)
+                  then 
+                     cruzANome=$(echo "$frx" | cut -f1)
+                  else 
+                     cruzANome=$(echo $n | awk '{ printf "FRX%02X", $1 }' | sed -e 's/0/G/g' -e 's/1/H/g' -e 's/2/I/g' -e 's/3/J/g' -e 's/4/K/g' -e 's/5/L/g' -e 's/6/M/g' -e 's/7/N/g' -e 's/8/O/g' -e 's/9/P/g')
+                     n=$((n+1))
+                     printf "$cruzANome\t$cruzALat\t$cruzALon\n" >> ../.frxs
+                  fi 
+
+                  sed -i "/$ponto1/s/^.*$/$cruzANome\t$cruzALat\t$cruzALon/" "$i"
+               fi 
             fi
             
             tac "$i" > "$i.fase5"
@@ -542,6 +580,8 @@ recortar() {
       fi 
    done
 
+   printf "\n" >&2
+
    for i in * 
    do 
       echo "$i" | grep -qv '\.fase5$' && rm "$i"
@@ -553,9 +593,8 @@ recortar() {
       mv "$i" "$nome"
    done 
 
-   totalAwys=$(ls | wc -l)
    cd ..
-   echo "$totalAwys aerovias delimitadas para esta FIR. " >&2
+   rm -f .frxs
 }
 
 balizas() {
@@ -567,9 +606,14 @@ balizas() {
    echo "Buscando balizas novas nas aerovias..." >&2
 
    cd awys
+   totalAwys=$(ls * | wc -l)
+   numAwys=0
    
    for i in *
    do 
+      numAwys=$((numAwys+1))
+      echo -ne "Analisando aerovia $numAwys/$totalAwys...\033[0K\r" >&2
+
       while IFS=$'\t' read nome lat lon
       do 
          tipo=$(grep -Pom1 "[[:graph:]]{1,} *\t *$nome[^[:graph:]]" "../$planilha" | awk -F' *\t *' '{print $1}')
@@ -585,64 +629,53 @@ balizas() {
                footer="$pwd/footer.fix_data"
                tipoNaBase='FIX'
             fi 
+         elif echo "$tipo" | grep -qi "\(NDB\|VOR\|DME\)"
+         then 
+            footer="$pwd/footer.navaid_data"
+
+            case "$tipo" in 
+               'VOR')
+                  tipoNaBase='NAV_VOR'
+               ;;
+
+               'NDB')
+                  tipoNaBase='NAV_NDB'
+               ;;
+
+               'DME')
+                  tipoNaBase='NAV_VD'
+               ;;
+            esac
+         elif echo "$nome" | grep -q '^FRX'
+         then 
+            footer="$pwd/footer.fix_data"
+            tipoNaBase='FIX'
          else 
-            if echo "$tipo" | grep -qi "\(NDB\|VOR\|DME\)"
-            then 
-               footer="$pwd/footer.navaid_data"
-
-               case "$tipo" in 
-                  'VOR')
-                     tipoNaBase='NAV_VOR'
-                  ;;
-
-                  'NDB')
-                     tipoNaBase='NAV_NDB'
-                  ;;
-
-                  'DME')
-                     tipoNaBase='NAV_VD'
-                  ;;
-               esac
-            else 
-               if echo "$nome" | grep -q '^FRE'
-               then 
-                  footer="$pwd/footer.fix_data"
-                  tipoNaBase='FIX'
-               else 
-                  echo "Erro de tipo: $tipo em $nome" >&2
-                  exit 1
-               fi 
-            fi
+            echo "Erro de tipo: $tipo em $nome" >&2
+            exit 1
          fi 
 
-         latJ=$(echo "$lat" | sed 's/[[:space:]]//g')
-         lonJ=$(echo "$lon" | sed 's/[[:space:]]//g')
-         pontoBase=$(coordsBase "$latJ" "$lonJ")
+         lat=$(echo "$lat" | sed 's/[[:space:]]//g')
+         lon=$(echo "$lon" | sed 's/[[:space:]]//g')
+         pontoBase=$(coordsBase "$lat" "$lon")
 
          if grep -q "$pontoBase" "$footer"
          then 
             sed -i "/$pontoBase/s/^[^;]*;\([^;]*\);[^;]*/$nome;\1;$nome/" "$footer"
-
-            for i in *
-            do 
-               sed -i "/$lat\t$lon/s/^[[:upper:]]\{1,\}\t/$nome\t/" "$i"
-            done 
+         elif grep -q "^$nome;" "$footer"
+         then 
+            sed -i "/$nome/s/[NS];\([0-9]\{1,2\};\)\{3\}[WE];[0-9]\{1,3\};\([0-9]\{1,2\};\)\{2\}/$pontoBase;/" "$footer" 
+         elif echo "$nome" | grep -q '^FRX' # insere no footer
+         then 
+            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$footer"
          else 
-            if grep -q "^$nome;" "$footer"
-            then 
-               sed -i "/$nome/s/[NS];\([0-9]\{1,2\};\)\{3\}[WE];[0-9]\{1,3\};\([0-9]\{1,2\};\)\{2\}/$pontoBase;/" "$footer" 
-            else # insere no footer
-               if echo "$nome" | grep -q '^FRE'
-               then 
-                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$footer"
-               else 
-                  echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$footer"
-               fi 
-            fi 
+            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$footer" 
          fi 
       done < "$i"
    done 
 
+   printf "\n" >&2
+   
    cd ..
 
    tabela() {
@@ -707,6 +740,10 @@ inserir() {
          n=$((n+1))
       done < "$i" | sed '$d' > "$i.base"
    done 
+
+   find . -empty -delete
+   totalAwys=$(ls *.base | wc -l)
+   echo "$totalAwys aerovias delimitadas para esta FIR. " >&2
 
    for i in *.base 
    do 
