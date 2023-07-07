@@ -468,7 +468,7 @@ recortar() {
                then 
                   tac "$i" > "$i.fase4"
                   continue 
-               elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" #PONTO 1 TBM
+               elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" 
                then 
                   tac "$i" | sed "/$ponto2/q" > "$i.fase4" 
                   continue
