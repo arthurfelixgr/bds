@@ -10,19 +10,19 @@
 
 if [ "$#" -eq 2 ]
 then 
-   if file "$2" | grep -q '\(ASCII\|CSV\)' && file "$1" | grep -q 'tar archive'
+   if file "$2" | grep -q '\(ASCII\|CSV\|HIT\)' && file "$1" | grep -q 'tar archive'
    then 
       echo "Erro de sintaxe." >&2
       exit 1
    fi 
 
-   if ! file "$1" | grep -q '\(ASCII\|CSV\)' && ! file "$2" | grep -q 'tar archive'
+   if ! file "$1" | grep -q '\(ASCII\|CSV\|HIT\)' && ! file "$2" | grep -q 'tar archive'
    then 
       echo "Arquivos inválidos." >&2
       exit 1
    fi 
 
-   if ! file "$1" | grep -q '\(ASCII\|CSV\)'
+   if ! file "$1" | grep -q '\(ASCII\|CSV\|HIT\)'
    then 
       echo "Arquivo de aerovias inválido." >&2
       exit 1
@@ -44,6 +44,9 @@ nomeBase=$(tar -tf "$base" | head -n1 | cut -d'_' -f1)
 pwd=$PWD
 
 extrairBase() { 
+   # uso: 
+   # extrairBase base.tar
+
    echo "Extraindo a base $1..." >&2
    pasta=$(tar -tf "$1" | head -n1 | cut -d'_' -f1)
    rm -rf "$pasta"
@@ -71,9 +74,30 @@ extrairBase() {
 
    cd ..
    echo "Extração completa." >&2
+
+   AREA=$(sed -n '13p' "$nomeBase"/firsec_data | cut -d';' -f5)
 }
 
-geograficas() { #auxiliar
+limparBase() {
+   # uso: 
+   # limparBase pasta
+
+   cd "$1"
+   head -n12 fix_data > header
+   mv header fix_data
+   head -n12 airway_data > header
+   mv header airway_data
+   head -n15 sid_data > header
+   mv header sid_data
+   cd ..
+}
+
+geograficas() { 
+   # uso: 
+   # geograficas latitude-cartesiana longitude-cartesiana
+   # ou: 
+   # echo "latitude-cartesiana longitude-cartesiana" | geograficas
+
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -109,7 +133,10 @@ geograficas() { #auxiliar
    echo "$hem_y$grau_y$min_y$seg_y $hem_x$grau_x$min_x$seg_x"
 }
 
-cartesianas() { #auxiliar
+cartesianas() { 
+   # uso: 
+   # cartesianas HGGMMSS HGGGMMSS
+
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -145,22 +172,31 @@ cartesianas() { #auxiliar
    printf "%s %s" "$latCart" "$lonCart"
 }
 
-extrairContorno() { #auxiliar para variável "fir"
-   test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
-   awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
-   while read linha
-   do 
-      echo "$linha" | cartesianas | sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
-   done 
+extrairContorno() { 
+   # uso (exemplo): 
+   # extrairContorno SBRE
 
-   test -n "$pwd/$nomeBase" && grep '^SBRE' "$pwd/$nomeBase/firseg_data" | 
-   head -n1 |  
-   awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
-   cartesianas | 
-   sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
+   FIR="$1"
+
+   test -n "$pwd/$nomeBase" && grep "^$FIR" "$pwd/$nomeBase/firseg_data" | 
+      awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
+         while read linha
+         do 
+            echo "$linha" | cartesianas | sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
+         done 
+
+   # fechando o contorno com o primeiro ponto
+   test -n "$pwd/$nomeBase" && grep "^$FIR" "$pwd/$nomeBase/firseg_data" | 
+      head -n1 |  
+         awk -F';' '{ printf "%s%02d%02d%02d %s%03d%02d%02d\n", $5, $6, $7, $8, $9, $10, $11, $12 }' | 
+            cartesianas | 
+               sed -e 's/^ */(/' -e 's/ *$/), /' -e 's/\([0-9]\)  *\([-0-9]\)/\1, \2/'
 }
 
-pontoDentro() { #auxiliar
+pontoDentro() { 
+   # uso (exemplo): 
+   # pontoDentro HGGMMSS HGGGMMSS
+
    coords=$(cartesianas "$1" "$2")
    lat=$(echo "$coords" | awk '{ print $1 }')
    lon=$(echo "$coords" | awk '{ print $2 }')
@@ -203,7 +239,10 @@ _EOF
    fi 
 }
 
-cruzFronteira() { #auxiliar
+cruzFronteira() { 
+   # uso: 
+   # cruzFronteira "(latitudeCartesianaPonto1, longitudeCartesianaPonto1), (latitudeCartesianaPonto2, longitudeCartesianaPonto2)"
+
    if [ "$#" -eq 0 ] 
    then 
       segmento=$(cat)
@@ -250,7 +289,10 @@ _EOF
    pontoCruz "$poligona" "$segmenta" | sed -e 's/POINT (//' -e 's/)//' 
 }
 
-coordsBase() { #auxiliar
+coordsBase() { 
+   # uso: 
+   # coordsBase HGGMMSS HGGGMMSS
+
    if [ "$#" -eq 0 ] 
    then 
       stdin=$(cat)
@@ -275,10 +317,14 @@ coordsBase() { #auxiliar
 }
 
 recortar() {
+   rm -f .cops
    echo "Delimitando as aerovias: " >&2
    mkdir -p awys
    rm -f awys/* 
 
+   # separando as aerovias da planilha em arquivos
+   # formato:
+   # FFFFF  H GG MM SS.####  H GGG MM SS.####
    awk -F ' *\t *' -v 'OFS=\t' 'NF > 2 { print $1, $3, $4, $5, $7, $8, $9 }' "$planilha" | while IFS=$'\t' read awy p1 la1 lo1 p2 la2 lo2
    do 
       awy=$(echo "$awy" | sed 's/[[:space:]]//g')
@@ -291,6 +337,7 @@ recortar() {
    totalAwys=$(ls | wc -l)
    numAwys=0
 
+   # removendo os fixos duplicados
    for i in *
    do 
       numAwys=$((numAwys+1))
@@ -300,6 +347,7 @@ recortar() {
 
    numAwys=0
 
+   # removendo as frações de segundo e fazendo os arredondamentos apropriados
    for i in *.fase0
    do 
       numAwys=$((numAwys+1))
@@ -346,6 +394,7 @@ recortar() {
 
    numAwys=0
 
+   # recorte na primeira extremidade
    for i in *.fase1
    do 
       numAwys=$((numAwys+1))
@@ -378,7 +427,8 @@ recortar() {
 
    totalAwys=$(ls *.fase2 | wc -l)
    numAwys=0
-   
+
+   # recorte na segunda extremidade
    for i in *.fase2
    do 
       numAwys=$((numAwys+1))
@@ -415,6 +465,7 @@ recortar() {
    rm -f ../.frxs
    touch ../.frxs
 
+   # criando fixo limítrofe, caso em falta (primeira extremidade)
    for i in *.fase3 
    do 
       numAwys=$((numAwys+1))
@@ -434,6 +485,7 @@ recortar() {
 
          if [ "$statusPonto2" = "borda" ]
          then 
+            echo "$ponto2" | cut -f1 >> ../.cops
             tac "$i" | sed "/$ponto2/q" > "$i.fase4"
          elif [ "$statusPonto2" = "dentro" ]
          then 
@@ -457,6 +509,7 @@ recortar() {
             if resultado=$(grep "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/navaid_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/waypoint_data")
             then  
                nomePonto=$(echo "$resultado" | cut -d';' -f1)
+               echo "$nomePonto" >> ../.cops
                latPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
                lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
@@ -466,10 +519,12 @@ recortar() {
 
                if echo "$ponto1" | grep -Pq "$cruzALat\t$cruzALon"
                then 
+                  echo "$ponto1" | cut -f1 >> ../.cops
                   tac "$i" > "$i.fase4"
                   continue 
                elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" 
                then 
+                  echo "$ponto2" | cut -f1 >> ../.cops
                   tac "$i" | sed "/$ponto2/q" > "$i.fase4" 
                   continue
                else 
@@ -492,6 +547,7 @@ recortar() {
             exit 1
          fi 
       else 
+         [ "$statusPonto1" = "borda" ] && echo "$ponto1" | cut -f1 >> ../.cops
          tac "$i" > "$i.fase4"
       fi 
    done 
@@ -499,6 +555,7 @@ recortar() {
    totalAwys=$(ls *.fase4 | wc -l)
    numAwys=0
 
+   # criando fixo limítrofe, caso em falta (segunda extremidade)
    for i in *.fase4 
    do 
       numAwys=$((numAwys+1))
@@ -518,6 +575,7 @@ recortar() {
 
          if [ "$statusPonto2" = "borda" ]
          then 
+            echo "$ponto2" | cut -f1 >> ../.cops
             tac "$i" | sed "/$ponto2/q" > "$i.fase5"
          elif [ "$statusPonto2" = "dentro" ]
          then 
@@ -541,6 +599,7 @@ recortar() {
             if resultado=$(grep "$pontoBase" "$pwd/$nomeBase/fix_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/navaid_data") || resultado=$(grep "$pontoBase" "$pwd/$nomeBase/waypoint_data")
             then  
                nomePonto=$(echo "$resultado" | cut -d';' -f1)
+               echo "$nomePonto" >> ../.cops
                latPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %02d %02d %02d", $6, $7, $8, $9 }')
                lonPonto=$(echo "$resultado" | awk -F';' '{ printf "%s %03d %02d %02d", $10, $11, $12, $13 }')
                sed -i "/$ponto1/s/^.*$/$nomePonto\t$latPonto\t$lonPonto/" "$i"
@@ -550,10 +609,12 @@ recortar() {
 
                if echo "$ponto1" | grep -Pq "$cruzALat\t$cruzALon"
                then 
+                  echo "$ponto1" | cut -f1 >> ../.cops
                   tac "$i" > "$i.fase5"
                   continue 
                elif echo "$ponto2" | grep -Pq "$cruzALat\t$cruzALon" 
                then 
+                  echo "$ponto2" | cut -f1 >> ../.cops
                   tac "$i" | sed "/$ponto2/q" > "$i.fase5"
                   continue  
                else 
@@ -576,6 +637,7 @@ recortar() {
             exit 1
          fi 
       else 
+         [ "$statusPonto1" = "borda" ] && echo "$ponto1" | cut -f1 >> ../.cops
          tac "$i" > "$i.fase5"
       fi 
    done
@@ -595,6 +657,8 @@ recortar() {
 
    cd ..
    rm -f .frxs
+   sort -u .cops > .copa
+   mv .copa .cops
 }
 
 balizas() {
@@ -602,6 +666,7 @@ balizas() {
    tail +13 "$nomeBase/waypoint_data" | sort -t';' -uk1,1 > footer.waypoint_data
    tail +13 "$nomeBase/fix_data" | sort -t';' -uk1,1 > footer.fix_data
    tail +13 "$nomeBase/navaid_data" | sort -t';' -uk1,1 > footer.navaid_data
+   tail +13 "$nomeBase/fix_jur_data" | sort -t';' -uk1,1 > footer.fix_jur_data
 
    echo "Buscando balizas novas nas aerovias..." >&2
 
@@ -667,9 +732,9 @@ balizas() {
             sed -i "/$nome/s/[NS];\([0-9]\{1,2\};\)\{3\}[WE];[0-9]\{1,3\};\([0-9]\{1,2\};\)\{2\}/$pontoBase;/" "$footer" 
          elif echo "$nome" | grep -q '^FRX' # insere no footer
          then 
-            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;1;1;0;0;0;0.0;1;20;0" >> "$footer"
+            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;1;0;0;1;0;0;0;0.0;1;20;0" >> "$footer" #cop
          else 
-            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$footer" 
+            echo "$nome;;$nome;$tipoNaBase;0;$pontoBase;0.0;0;0;0;1;0;0;0;0.0;1;20;0" >> "$footer" #normal
          fi 
       done < "$i"
    done 
@@ -686,18 +751,62 @@ balizas() {
             table='waypoints'
          ;;
 
-         '-f')
-            arq="$nomeBase/fix_data"
-            footer="$pwd/footer.fix_data"
-            table='fixos'
-         ;;
-
          '-a')
             arq="$nomeBase/navaid_data"
             footer="$pwd/footer.navaid_data"
             table='auxílios'
          ;;
 
+         '-j')
+            arq="$nomeBase/fix_jur_data"
+            footer="$pwd/footer.fix_jur_data"
+            table='jurisdições'
+            
+            tail +13 "$nomeBase/firseg_data" | cut -d';' -f1 | sort -u | grep -v "$AREA" | while read ADJ
+            do 
+               fir=$(extrairContorno "$ADJ")
+               echo "Definindo jurisdições para $ADJ... " >&2
+
+               while read fix 
+               do 
+                  resultado=$(cat awys/* | grep -m1 "$fix")
+                  la=$(echo "$resultado" | cut -f2 | sed 's/[[:space:]]*//g')
+                  lo=$(echo "$resultado" | cut -f3 | sed 's/[[:space:]]*//g')
+
+                  statusFix=$(pontoDentro "$la" "$lo")
+
+                  if [ "$statusFix" = "fora" ] 
+                  then  
+                     pontoBase=$(coordsBase "$la" "$lo")
+
+                     grep -q "^$ADJ;.*;$pontoBase$" "$nomeBase/firseg_data" && {
+                        sed -i "/$fix/d" "$footer"
+                        echo "$fix;FIX;$ADJ;FIR" >> "$footer"
+                     }
+                  else
+                     sed -i "/$fix/d" "$footer"
+                     echo "$fix;FIX;$ADJ;FIR" >> "$footer"
+                  fi
+               done < .cops 
+            done 
+         ;;
+
+         '-f')
+            arq="$nomeBase/fix_data"
+            footer="$pwd/footer.fix_data"
+            table='fixos'
+
+            while read fixo
+            do 
+               sed -i "/$fixo/s/\(0.0;\)0/\11/" "$footer"
+            done < .cops
+
+            grep 'FIR$' "$nomeBase/fix_jur_data" | cut -d';' -f1 | while read fixo
+            do 
+               sed -i "/$fixo/s/\(0.0;\)0/\11/" "$footer"
+            done 
+         ;;
+         
          *)
             echo "tabela(): sem argumentos" >&2
          ;;
@@ -718,8 +827,9 @@ balizas() {
    }
 
    tabela -w
-   tabela -f
    tabela -a
+   tabela -j
+   tabela -f
 
    echo "Balizas atualizadas! " >&2
 }
@@ -796,7 +906,8 @@ limpar() {
 }
 
 extrairBase "$base"
-fir=$(extrairContorno)
+limparBase "$nomeBase"
+fir=$(extrairContorno "$AREA")
 recortar
 balizas
 inserir
