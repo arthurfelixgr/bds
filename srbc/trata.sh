@@ -413,7 +413,7 @@ trataCPL() {
    fi 
 
    numFixoInv=$((numFixoInv+1))
-   printf "$area\t$numFixoInv\t\t$origem\t\t\tG\t$latOrigem\t$lonOrigem\n" >> "fixosInv$numeroExercicio"
+   printf "$area\t$numFixoInv\t\t$pontoEntrada\t\t\tG\t$latOrigem\t$lonOrigem\n" >> "fixosInv$numeroExercicio"
 
    numeroTrafego=$((numeroTrafego+1))
    printf "$area\t$numeroExercicio\t$numeroTrafego\t$tipo\t$ssr\t$indicativo\t$origem\t$destino\t \t$flInicial\t$velInicial\t$proa\t$nasceEmTipo\t$latOuNum\t$lonOuTempo\t \t \t$piloto\t$nasceAos\t \t \t$equipamento\t$rota\t$eet\t$rmk\t$flFinal\t$velFinal\t0\tN\t \n" >> $numeroExercicio
