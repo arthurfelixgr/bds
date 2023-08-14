@@ -1,6 +1,11 @@
 #! /bin/bash -
 
-rm -f traffs fixosInv
+[ $# -lt 2 ] && {
+   echo "erro args" >&2
+   exit 1
+}
+
+rm -f "$1" "fixosInv$1"
 arquivoPlano='' # definido depois, no laço for da função geraExercicio
 fixosAISWeb='fixos-aisweb' # usado na funcao trataRota
 jsonAerodromos='aerodromos'
@@ -115,15 +120,14 @@ trataFPL() {
 
    corpo=$(sed -n "/(FPL-/,/)/p" "$arquivoPlano" | sed -n '0,/)/p' | tr -d '\r\n()' | sed 's/^-MSGTXT *//')
    echo "$corpo" | cut -d'-' -f7 | grep '^M[0-9]\{1,\}F[0-9]\{3\}' && return 1 # se MACH, não interessa
-   flFinal=$(echo "$corpo" | cut -d'-' -f7 | sed 's/^.\{5\}\([^ ]*\).*/\1/')
+   flFinal=$(echo "$corpo" | cut -d'-' -f7 | grep -o 'F[0-9]\{3\}' | tr -d 'F' | sort -nr | head -1)
 
-   if echo $flFinal | grep -qv 'F[0-9]\{3\}' #[ "$flFinal" = "VFR" ] 
+   if echo $flFinal | grep -qv '[0-9]\{3\}' #[ "$flFinal" = "VFR" ] 
    then 
       flFinal=$(echo "$corpo" | grep -o '[0-9]\{1,\} *FT' | head -1 | sed 's/FT$//' | awk '{print $1/100}') 
-      [ -z "$flFinal" ] && flFinal=$(echo "$corpo" | cut -d'-' -f7 | grep -o 'N[0-9]\{4\}F[0-9]\{3\}' | head -1 | cut -dF -f2) # se nao houver pés no plano, buscar nível na rota
       [ -z "$flFinal" ] && flFinal=5
-   else 
-      flFinal=$(echo $flFinal | tr -d 'F')
+   #else 
+   #   flFinal=$(echo $flFinal | tr -d 'F')
    fi 
 
    origem=$(echo "$corpo" | cut -d'-' -f6 | sed 's/[[:digit:]]\{4\}$//')
@@ -150,10 +154,36 @@ trataFPL() {
    tipo=$(echo "$corpo" | cut -d'-' -f4 | sed -e 's/^[[:digit:]]*//' -e 's/\/.*//')
    equipamento=$(echo "$corpo" | cut -d'-' -f5)
    eobt=$(echo "$corpo" | cut -d'-' -f6 | grep -o '[[:digit:]]\{4\}$')
-   rota=$(echo "$corpo" | cut -d'-' -f7 | sed 's/^[^ ]* \(.*\)/\1/')
+   rota=$(echo "$corpo" | cut -d'-' -f7) #| sed 's/^[^ ]* \(.*\)/\1/')
    rmk=$(echo "$corpo" | awk -F'-' '{print $NF}' | sed -e 's/ IDPLANO.*//' -e 's/DOF\/[0-9]\{6\}//' -e "s/\(.*\)\(EET\/\(SB[A-Z]\{2\}[0-9]\{4\} *\)*\)\(.*\)/\1\4/" -e 's/^ *//' -e 's/ *$//')
-   velFinal=$(echo "$corpo" | cut -d'-' -f7 | sed 's/^N\([[:digit:]]\{4\}\).*/\1/')
+   velFinal=$(echo "$corpo" | cut -d'-' -f7 | grep -o 'N[0-9]\{4\}' | tr -d 'N' | sort -nr | head -1)
    ssr=$(grep -om1 'SSR: [[:digit:]]*' "$arquivoPlano" | awk '{print $2}')
+
+   #pilotos
+   piloto=''
+   primeiroSetor=$(grep -m1 '^TRECHOS' "$arquivoPlano" | grep -o '\(S[0-9]\{2\}\|[0-9]\{2\}[LF]\)' | head -1)
+
+   case $primeiroSetor in
+      S01 | S02 | S03 | 03F | S04 )
+         piloto=43 #NORTE
+      ;;
+
+      S05 | S06 | S07 | 07F | S08 | 11L | 11F )
+         piloto=44 #CENTRAL
+      ;;
+
+      S09 | S10 | 12L )
+         piloto=45 #SUDOESTE
+      ;;
+
+      S14 | 14F | S15 )
+         piloto=46 #SUL
+      ;;
+
+      * )
+         piloto=47
+      ;;
+   esac
    
    #trataRota
    rota2=''
@@ -230,10 +260,163 @@ trataFPL() {
    fi 
 
    numFixoInv=$((numFixoInv+1))
-   printf "$area\t$numFixoInv\t\t$origem\t\t\tG\t$latOrigem\t$lonOrigem\n" >> ../fixosInv
+   printf "$area\t$numFixoInv\t\t$origem\t\t\tG\t$latOrigem\t$lonOrigem\n" >> "fixosInv$numeroExercicio"
 
    numeroTrafego=$((numeroTrafego+1))
-   printf "$area\t$numeroExercicio\t$numeroTrafego\t$tipo\t$ssr\t$indicativo\t$origem\t$destino\t \t$flInicial\t$velInicial\t$proa\t$nasceEmTipo\t$latOuNum\t$lonOuTempo\t \t \t43\t$nasceAos\t \t \t$equipamento\t$rota\t$eet\t$rmk\t$flFinal\t$velFinal\t0\tN\t \n" >> traffs
+   printf "$area\t$numeroExercicio\t$numeroTrafego\t$tipo\t$ssr\t$indicativo\t$origem\t$destino\t \t$flInicial\t$velInicial\t$proa\t$nasceEmTipo\t$latOuNum\t$lonOuTempo\t \t \t$piloto\t$nasceAos\t \t \t$equipamento\t$rota\t$eet\t$rmk\t$flFinal\t$velFinal\t0\tN\t \n" >> $numeroExercicio
+}
+
+trataCPL() {
+   # tempo total do tráfego
+   minutosTotais=$(grep -m1 '^ETIM' "$arquivoPlano" | grep -o '[0-9]\{2\}:[0-9]\{2\} *$' | awk -F':' '{print $1*60 + $2}') ##
+   # inicio do exercicio em minutos
+   minutoInicio=$(echo $horaInicio | sed 's/^[0-9]\{2\}/&:/' | awk -F':' '{print $1*60 + $2}') ##
+
+   if [ $minutoInicio -ge $minutosTotais ]
+   then 
+      return 1
+   fi 
+
+   corpo=$(sed -n "/(CPL-/,/)/p" "$arquivoPlano" | sed -n '0,/)/p' | tr -d '\r\n()' | sed 's/^-MSGTXT *//') ##
+   echo "$corpo" | cut -d'-' -f8 | grep '^M[0-9]\{1,\}F[0-9]\{3\}' && return 1 # se MACH, não interessa
+   flFinal=$(echo "$corpo" | cut -d'-' -f8 | grep -o 'F[0-9]\{3\}' | tr -d 'F' | sort -nr | head -1) ##
+
+   if echo $flFinal | grep -qv '[0-9]\{3\}' #[ "$flFinal" = "VFR" ] 
+   then 
+      flFinal=$(echo "$corpo" | grep -o '[0-9]\{1,\} *FT' | head -1 | sed 's/FT$//' | awk '{print $1/100}') 
+      [ -z "$flFinal" ] && flFinal=5
+   #else 
+   #   flFinal=$(echo $flFinal | tr -d 'F')
+   fi 
+
+   origem=$(echo "$corpo" | cut -d'-' -f6) #| sed 's/[[:digit:]]\{4\}$//')
+   destino=$(echo "$corpo" | cut -d'-' -f9) #| cut -c1-4) #grep -o '[[:alpha:]]\{4\}' | head -n1)
+
+   vemDeFora=
+   vaiPraFora=
+   eet='EET/SBRE0001'
+   
+   grep -m1 '^Posi' "$arquivoPlano" | grep -q ': *AIDC' && {
+      vemDeFora=1
+      eet="EET/$(sed -n '/^ETB/{n;p;q}' "$arquivoPlano" | cut -c16-19)0001 SBRE0002"
+   } 
+
+   grep -m1 '^Posi' "$arquivoPlano" | grep -q 'AIDC$' && {
+      vaiPraFora=1
+      eet="$eet $(sed -n '/^ETB/{n;p;q}' "$arquivoPlano" | cut -c24-27)0002"
+   }
+
+   fis=$(filtroFIS)
+   [ "$fis" -eq 0 ] && return 1 
+
+   indicativo=$(echo "$corpo" | cut -d'-' -f2 | cut -d'/' -f1) ##
+   tipo=$(echo "$corpo" | cut -d'-' -f4 | sed -e 's/^[[:digit:]]*//' -e 's/\/.*//') ##
+   equipamento=$(echo "$corpo" | cut -d'-' -f5) ##
+   eobt=$(echo "$corpo" | cut -d'-' -f7 | cut -d'/' -f2 | cut -d'F' -f1) ##HORA DE ENTRADA NA FIR #cut -d'-' -f6 | grep -o '[[:digit:]]\{4\}$')
+   rota=$(echo "$corpo" | cut -d'-' -f8) #| sed 's/^[^ ]* \(.*\)/\1/') ##
+   rmk=$(echo "$corpo" | awk -F'-' '{print $NF}' | sed -e 's/ IDPLANO.*//' -e 's/DOF\/[0-9]\{6\}//' -e "s/\(.*\)\(EET\/\(SB[A-Z]\{2\}[0-9]\{4\} *\)*\)\(.*\)/\1\4/" -e 's/^ *//' -e 's/ *$//') ##
+   velFinal=$(echo "$corpo" | cut -d'-' -f8 | grep -o 'N[0-9]\{4\}' | tr -d 'N' | sort -nr | head -1) ##
+   ssr=$(grep -om1 'SSR: [[:digit:]]*' "$arquivoPlano" | awk '{print $2}') ##
+
+   #pilotos
+   piloto=''
+   primeiroSetor=$(grep -m1 '^TRECHOS' "$arquivoPlano" | grep -o '\(S[0-9]\{2\}\|[0-9]\{2\}[LF]\)' | head -1) ##
+
+   case $primeiroSetor in ##
+      S01 | S02 | S03 | 03F | S04 )
+         piloto=43 #NORTE
+      ;;
+
+      S05 | S06 | S07 | 07F | S08 | 11L | 11F )
+         piloto=44 #CENTRAL
+      ;;
+
+      S09 | S10 | 12L )
+         piloto=45 #SUDOESTE
+      ;;
+
+      S14 | 14F | S15 )
+         piloto=46 #SUL
+      ;;
+
+      * )
+         piloto=47
+      ;;
+   esac
+   
+   #trataRota ##
+   rota2=''
+   while read linha
+   do 
+      latitude=$(grep $linha "$fixosAISWeb" | cut -f7)
+      longitude=$(grep $linha "$fixosAISWeb" | cut -f9)
+      lat=$(echo "$latitude" | awk -F"(°|'|\"|[[:space:]])" '{ if($3 > 30){$2++}; printf "%02d%02d%s", $1, $2, $5}')
+      lon=$(echo "$longitude" | awk -F"(°|'|\"|[[:space:]])" '{ if($3 > 30){$2++}; printf "%03d%02d%s", $1, $2, $5}')
+      rota2=$(echo "$rota" | sed "s/$linha/$lat$lon/g")
+      rota="$rota2"
+   done < <(echo "$rota" | tr ' ' '\n' | grep -o '^[[:alnum:]]\{5\}\( \|\/\)' | tr -d '/')
+
+   grep -q "$origem" "$jsonAerodromos" || {
+      echo "Aeródromo não encontrado: $origem" >&2
+      return 1
+   }
+
+   grep -q "$destino" "$jsonAerodromos" || {
+      echo "Aeródromo não encontrado: $destino" >&2
+      return 1
+   }
+
+   y_origem=$(grep $origem "$jsonAerodromos" | grep -io '"LATGEOPOINT":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+   x_origem=$(grep $origem "$jsonAerodromos" | grep -io '"LONGEOPOINT":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+   y_destino=$(grep $destino "$jsonAerodromos" | grep -io '"LATGEOPOINT":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+   x_destino=$(grep $destino "$jsonAerodromos" | grep -io '"LONGEOPOINT":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+
+   proa=$(radial $y_origem $x_origem $y_destino $x_destino)
+   milhas=$(distancia $y_origem $x_origem $y_destino $x_destino)
+
+   nasceAos=''
+   nasceEmTipo='' # G ou T
+   latOuNum=''
+   lonOuTempo=''
+   minutoEOBT=$(echo $eobt | sed 's/^[0-9]\{2\}/&:/' | awk -F':' '{print $1*60 + $2}')
+   flInicial=''
+   velInicial=''
+
+   #trataNascimento
+   pontoEntrada=$(echo "$corpo" | cut -d'-' -f7 | cut -d'/' -f1)
+   if echo "$pontoEntrada" | grep -q '[A-Z]\{3,5\}' 
+   then 
+      latitude=$(grep "$pontoEntrada" "$fixosAISWeb" | cut -f7)
+      longitude=$(grep "$pontoEntrada" "$fixosAISWeb" | cut -f9)
+      latOrigem=$(echo "$latitude" | awk -F"(°|'|\"|[[:space:]])" '{ printf "%02d%06.3f%s", $1, $2+$3/60, $5 }')
+      lonOrigem=$(echo "$longitude" | awk -F"(°|'|\"|[[:space:]])" '{ printf "%03d%06.3f%s", $1, $2+$3/60, $5 }')
+   else 
+      latOrigem=$(echo "$pontoEntrada" | sed 's/\([0-9]\{4\}\)\([SN]\).*/\1.000\2/')
+      lonOrigem=$(echo "$pontoEntrada" | sed 's/.*\([0-9]\{5\}\)\([WE]\)/\1.000\2/')
+   fi 
+
+   flInicial=$(echo "$corpo" | cut -d'-' -f7 | cut -d'/' -f2 | cut -dF -f2)
+   velInicial=$velFinal
+   
+   if [ $minutoEOBT -ge $minutoInicio ]
+   then 
+      nasceAos=$((minutoEOBT-minutoInicio))
+      [ "$nasceAos" -gt 45 ] && return 1
+      nasceEmTipo='G'
+      latOuNum=$latOrigem
+      lonOuTempo=$lonOrigem
+   else
+      nasceAos='000'
+      nasceEmTipo='T'
+      latOuNum=$pontoEntrada
+      lonOuTempo=$((minutoInicio-minutoEOBT)) #tempo decorrido desde o nascimento ate o inicio do exercicio
+   fi 
+
+   numFixoInv=$((numFixoInv+1))
+   printf "$area\t$numFixoInv\t\t$origem\t\t\tG\t$latOrigem\t$lonOrigem\n" >> "fixosInv$numeroExercicio"
+
+   numeroTrafego=$((numeroTrafego+1))
+   printf "$area\t$numeroExercicio\t$numeroTrafego\t$tipo\t$ssr\t$indicativo\t$origem\t$destino\t \t$flInicial\t$velInicial\t$proa\t$nasceEmTipo\t$latOuNum\t$lonOuTempo\t \t \t$piloto\t$nasceAos\t \t \t$equipamento\t$rota\t$eet\t$rmk\t$flFinal\t$velFinal\t0\tN\t \n" >> $numeroExercicio
 }
 
 geraExercicio() {
@@ -256,7 +439,7 @@ geraExercicio() {
             trataFPL
          elif grep -q "(CPL" "$arquivoPlano"
          then 
-            continue #trataCPL
+            trataCPL
          fi
       else
          echo "$0: erro" >&2
@@ -265,4 +448,4 @@ geraExercicio() {
 }
 
 #set -x
-geraExercicio '23FR' '1001' '0900' 'planos'
+geraExercicio '23FR' $1 $2 'planos'
