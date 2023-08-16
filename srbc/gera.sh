@@ -206,7 +206,7 @@ trataFPL() {
       lon=$(echo "$longitude" | awk -F"(°|'|\"|[[:space:]])" '{ if($3 > 30){$2++}; printf "%03d%02d%s", $1, $2, $5}')
       rota2=$(echo "$rota" | sed "s/$linha/$lat$lon/g")
       rota="$rota2"
-   done < <(echo "$rota" | sed 's/ / \n/g' | grep -o '^[A-Z]\{2\}[[:alnum:]]\{3\} ')
+   done < <(echo "$rota" | sed -e 's/\// \n/g' -e 's/ / \n/g' | grep -o '^[A-Z]\{2\}[[:alnum:]]\{3\} ')
 
    grep -q "$origem" "$jsonAerodromos" || {
       echo "Aeródromo não encontrado: $origem" >&2
@@ -365,7 +365,7 @@ trataCPL() {
       lon=$(echo "$longitude" | awk -F"(°|'|\"|[[:space:]])" '{ if($3 > 30){$2++}; printf "%03d%02d%s", $1, $2, $5}')
       rota2=$(echo "$rota" | sed "s/$linha/$lat$lon/g")
       rota="$rota2"
-   done < <(echo "$rota" | sed 's/ / \n/g' | grep -o '^[A-Z]\{2\}[[:alnum:]]\{3\} ')
+   done < <(echo "$rota" | sed -e 's/\// \n/g' -e 's/ / \n/g' | grep -o '^[A-Z]\{2\}[[:alnum:]]\{3\} ')
 
    grep -q "$origem" "$jsonAerodromos" || {
       echo "Aeródromo não encontrado: $origem" >&2
