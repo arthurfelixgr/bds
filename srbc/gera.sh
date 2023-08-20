@@ -111,7 +111,7 @@ bibFix() {
    # ('23FR','0001','','ABUCU','','','G','0435.167S','03908.083W'),
    nomeFix=$(echo "$latOuNum" | sed -e 's/1/I/g' -e 's/2/Z/g' -e 's/3/E/g' -e 's/4/A/g' -e 's/5/S/g' -e 's/6/G/g' -e 's/7/T/g' -e 's/8/B/g' -e 's/9/Q/g' -e 's/0/O/g' -e 's/\./P/g' | cut -c1-5)
    
-   if resultado=$(grep "$nomeFix" "$area@a_fixos") # busca o nome do fixo na tabela de fixos da área
+   if resultado=$(grep "'$latOuNum','$lonOuDistancia'" "$area@a_fixos") # busca as coordenadas do fixo na tabela de fixos da área
    then 
       latOuNum=$(echo "$resultado" | awk -F"','" '{print $2}') # substitui o nome do fixo pelo número encontrado
    else 
@@ -168,7 +168,8 @@ trataFPL() {
    tipo=$(echo "$corpo" | cut -d'-' -f4 | sed -e 's/^[[:digit:]]*//' -e 's/\/.*//')
    equipamento=$(echo "$corpo" | cut -d'-' -f5)
    eobt=$(echo "$corpo" | cut -d'-' -f6 | grep -o '[[:digit:]]\{4\}$')
-   rota=$(echo "$corpo" | cut -d'-' -f7 | sed 's/^[^ ]* //')
+   #rota=$(echo "$corpo" | cut -d'-' -f7 | sed 's/^[^ ]* //')
+   rota=$(sed -n '/Rota[[:space:]]*:/,/Obs/{p; /^Obs/q}' "$arquivoPlano" | sed -e '$d' -e 's/^Rota *://' -e 's/^[[:space:]]*//' | tr -d '\n')
    rmk=$(echo "$corpo" | awk -F'-' '{print $NF}' | sed -e 's/ IDPLANO.*//' -e 's/PBN\/[^ ]*//' -e 's/DOF\/[0-9]\{6\}//' -e "s/\(.*\)\(EET\/\(SB[A-Z]\{2\}[0-9]\{4\} *\)*\)\(.*\)/\1\4/" -e 's/^ *//' -e 's/ *$//')
    velFinal=$(echo "$corpo" | cut -d'-' -f7 | grep -o 'N[0-9]\{4\}' | tr -d 'N' | sort -nr | head -1)
    ssr=$(grep -om1 'SSR: [[:digit:]]*' "$arquivoPlano" | awk '{print $2}')
@@ -179,19 +180,19 @@ trataFPL() {
 
    case $primeiroSetor in
       S01 | S02 | S03 | 03F | S04 )
-         piloto=16 #NORTE
+         piloto=NORTE
       ;;
 
       S05 | S06 | S07 | 07F | S08 | 11L | 11F )
-         piloto=15 #CENTRAL
+         piloto=CENTRAL
       ;;
 
       S09 | S10 | 12L | S14 | 14F | S15 )
-         piloto=14 #SUL
+         piloto=SUL
       ;;
 
       * )
-         piloto=13
+         piloto=ACC
       ;;
    esac
    
@@ -327,7 +328,8 @@ trataCPL() {
    tipo=$(echo "$corpo" | cut -d'-' -f4 | sed -e 's/^[[:digit:]]*//' -e 's/\/.*//') ##
    equipamento=$(echo "$corpo" | cut -d'-' -f5) ##
    eobt=$(echo "$corpo" | cut -d'-' -f7 | cut -d'/' -f2 | cut -d'F' -f1) ##HORA DE ENTRADA NA FIR #cut -d'-' -f6 | grep -o '[[:digit:]]\{4\}$')
-   rota=$(echo "$corpo" | cut -d'-' -f8 | sed 's/^[^ ]* \(.*\)/\1/') ##
+   #rota=$(echo "$corpo" | cut -d'-' -f8 | sed 's/^[^ ]* \(.*\)/\1/') ##
+   rota=$(sed -n '/Rota[[:space:]]*:/,/Obs/{p; /^Obs/q}' "$arquivoPlano" | sed -e '$d' -e 's/^Rota *://' -e 's/^[[:space:]]*//' | tr -d '\n')
    rmk=$(echo "$corpo" | awk -F'-' '{print $NF}' | sed -e 's/ IDPLANO.*//' -e 's/PBN\/[^ ]*//' -e 's/DOF\/[0-9]\{6\}//' -e "s/\(.*\)\(EET\/\(SB[A-Z]\{2\}[0-9]\{4\} *\)*\)\(.*\)/\1\4/" -e 's/^ *//' -e 's/ *$//') ##
    velFinal=$(echo "$corpo" | cut -d'-' -f8 | grep -o 'N[0-9]\{4\}' | tr -d 'N' | sort -nr | head -1) ##
    ssr=$(grep -om1 'SSR: [[:digit:]]*' "$arquivoPlano" | awk '{print $2}') ##
@@ -336,21 +338,21 @@ trataCPL() {
    piloto=''
    primeiroSetor=$(grep -m1 '^TRECHOS' "$arquivoPlano" | grep -o '\(S[0-9]\{2\}\|[0-9]\{2\}[LF]\)' | head -1) ##
 
-   case $primeiroSetor in ##
+   case $primeiroSetor in
       S01 | S02 | S03 | 03F | S04 )
-         piloto=16 #NORTE
+         piloto=NORTE
       ;;
 
       S05 | S06 | S07 | 07F | S08 | 11L | 11F )
-         piloto=15 #CENTRAL
+         piloto=CENTRAL
       ;;
 
       S09 | S10 | 12L | S14 | 14F | S15 )
-         piloto=14 #SUL
+         piloto=SUL
       ;;
 
       * )
-         piloto=13
+         piloto=ACC
       ;;
    esac
    
