@@ -23,7 +23,7 @@ do
             echo "$linha" | sed "s/,'$numFixAntigo',/,'$numFixNovo',/" >> bptrajAtualizado
          else
             coords=$(grep "'$numFixAntigo'" "$fixosAntigo" | grep -o "'G'[^)]*")
-            echo "$linha" | sed "s/'F','$numFixAntigo','',''/$coords/" >> bptrajAtualizado
+            echo "$linha" | sed "s/'F','$numFixAntigo',''/$coords/" >> bptrajAtualizado
          fi 
       ;;
 
@@ -43,7 +43,7 @@ do
       ;;
 
       G )
-         continue
+         echo "$linha" >> bptrajAtualizado
       ;;
 
       * )
