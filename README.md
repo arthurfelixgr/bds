@@ -5,7 +5,7 @@
 * Inserir os resultados na base
 * Tratar uma tabela de setores, eliminando problemas como pontos sem nome, pontos com nomes iguais e coordenadas diferentes e pontos com mesmas coordenadas e nomes diferentes. 
 
-```
+
 ## Requisitos:
 
 * Ambiente Linux (testado no Ubuntu 22.04)
